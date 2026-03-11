@@ -99,7 +99,8 @@
             }
             const html = images.map(img => {
                 const typeText = img.type === 0 ? 'Аниме' : 'Фото';
-                const imageUrl = `${img.path}`;
+                const folder = img.type === 0 ? 'anime' : 'real';
+                const imageUrl = `/images/${folder}/${img.path}`;
                 return `
                     <div class="card">
                         <img src="${imageUrl}" alt="Image ${img.id}" loading="lazy">
