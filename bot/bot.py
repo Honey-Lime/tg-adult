@@ -7,6 +7,7 @@ Telegram Bot для оценки и сохранения изображений 
 import logging
 import asyncio
 from typing import Dict, Optional, List
+import os
 
 from aiogram import Bot, Dispatcher, Router, types
 from aiogram.filters.command import Command
@@ -45,8 +46,8 @@ class BotController:
 		self.last_image_data: Dict[int, dict] = {}			   # chat_id -> данные последней картинки (id, type, ...)
 		self.last_image_message_id: Dict[int, int] = {}		  # chat_id -> message_id последней картинки
 		self.user_processing: Dict[int, bool] = {}			   # chat_id -> флаг обработки (защита от повторных нажатий)
-		self.moderation_queues: Dict[int, List[dict]] = {}
-		self.last_moderation_message_id: Dict[int, int] = {}
+		self.moderation_queues: Dict[int, List[dict]] = {}  # очередь модерации для каждого админа
+		self.last_moderation_message_id: Dict[int, int] = {}  # последнее сообщение модерации
 
 		# +++ Защита от спама +++
 		self.last_picture_time: Dict[int, float] = {}			# chat_id -> время последней отправки картинки (для rate limit)
