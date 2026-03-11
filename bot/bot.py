@@ -36,6 +36,7 @@ class BotController:
 		self.dp = Dispatcher()
 		self.router = Router()
 		self.admin_ids = admin_ids
+		self.bot_username = None
 
 		# Хранилища данных для каждого пользователя (in-memory)
 		self.message_history: Dict[int, List[int]] = {}		  # chat_id -> список ID сообщений (макс. 10)
@@ -153,6 +154,19 @@ class BotController:
 
 	async def cmd_start(self, message: Message) -> None:
 		chat_id = message.chat.id
+		args = message.get_args()
+		referrer_id = None
+		if args and args.isdigit():
+			referrer_id = int(args)
+			# Нельзя пригласить самого себя
+			if referrer_id == chat_id:
+				referrer_id = None
+
+		# Получаем пользователя (с возможным реферером)
+		user = database.get_user(chat_id, referrer_id)
+		print(user)  # для отладки
+
+		# Удаляем последнюю картинку, если она есть
 		if chat_id in self.last_image_message_id:
 			try:
 				await self.bot.delete_message(chat_id, self.last_image_message_id[chat_id])
@@ -371,6 +385,18 @@ class BotController:
 			elif callback.data == "report_cancel":
 				await self.delete_current(chat_id, message_id)
 				await self.send_picture(chat_id)
+				
+			elif callback.data == "referral":
+				if not self.bot_username:
+					# Если по какой-то причине username не получен, получим сейчас
+					bot_info = await self.bot.me()
+					self.bot_username = bot_info.username
+				link = f"https://t.me/{self.bot_username}?start={chat_id}"
+				await self.send_and_track(
+					chat_id,
+					text=f"🔗 Ваша реферальная ссылка:\n{link}\n\nПриглашайте друзей! За каждого нового пользователя вы получите 250 монет.",
+					track=False,
+				)
 
 
 		finally:
@@ -380,19 +406,13 @@ class BotController:
 	# ==================== МЕТОДЫ ОТПРАВКИ СООБЩЕНИЙ ====================
 
 	async def send_menu(self, chat_id: int) -> None:
-		"""Отправляет меню выбора типа контента и кнопку для открытия мини-приложения."""
-		# Кнопки первой строки (выбор типа)
-		buttons_row1 = [
-			InlineKeyboardButton(text="Anime", callback_data="anime"),
-			InlineKeyboardButton(text="Real", callback_data="real")
-		]
-		# Кнопка для мини-приложения (вторая строка)
-		mini_app_button = InlineKeyboardButton(
-			text="ТОП 50 / Сохраненные",
-			web_app=WebAppInfo(url=f"https://hotpicturesbot.ru/app?user_id={chat_id}")
-		)
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[buttons_row1, [mini_app_button]])
-		await self.send_and_track(chat_id, text="Выбери стиль картинок или открой галерею:", reply_markup=keyboard)
+		keyboard = InlineKeyboardMarkup(inline_keyboard=[
+			[InlineKeyboardButton(text="Anime", callback_data="anime"),
+			 InlineKeyboardButton(text="Real", callback_data="real")],
+			[InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="referral")]
+		])
+		await self.send_and_track(chat_id, text="Выбери стиль картинок или получи реферальную ссылку:",
+								  reply_markup=keyboard)
 
 
 	async def send_picture(self, chat_id: int) -> None:
@@ -460,6 +480,8 @@ class BotController:
 
 	async def start_polling(self) -> None:
 		await self.set_bot_commands()
+		bot_info = await self.bot.me()
+		self.bot_username = bot_info.username
 		self.dp.include_router(self.router)
 		await self.dp.start_polling(self.bot)
 

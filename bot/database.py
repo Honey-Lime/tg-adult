@@ -79,20 +79,45 @@ def add_picture_record(pic_type, post_id, filename):
 	finally:
 		return_connection(conn)
 
-def get_user(user_id):
+def get_user(user_id, referrer_id=None):
+	"""
+	Получает пользователя по id. Если не существует – создаёт.
+	Если передан referrer_id и пользователь только что создан, начисляет рефереру 250 монет.
+	"""
 	conn = get_connection()
 	if not conn:
 		return None
 	try:
 		with conn.cursor() as cur:
+			# Пытаемся найти пользователя
 			cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 			row = cur.fetchone()
 			if row:
 				columns = [desc[0] for desc in cur.description]
 				return dict(zip(columns, row))
 
-			cur.execute("INSERT INTO users (id) VALUES (%s) ON CONFLICT (id) DO NOTHING", (user_id,))
-			conn.commit()
+			# Пользователь не найден – вставляем с рефералом или без
+			if referrer_id is not None:
+				cur.execute("""
+					INSERT INTO users (id, referrer_id)
+					VALUES (%s, %s)
+					ON CONFLICT (id) DO NOTHING
+					RETURNING id
+				""", (user_id, referrer_id))
+			else:
+				cur.execute("""
+					INSERT INTO users (id)
+					VALUES (%s)
+					ON CONFLICT (id) DO NOTHING
+					RETURNING id
+				""", (user_id,))
+
+			inserted = cur.fetchone()
+			if inserted and referrer_id is not None:
+				# Если вставка произошла и был указан реферер – начисляем монеты
+				add_coins(referrer_id, 250)
+
+			# Получаем данные пользователя (теперь он точно есть)
 			cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 			row = cur.fetchone()
 			if row:
