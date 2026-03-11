@@ -18,6 +18,7 @@
 
         /* Стили для кнопки полноэкранного режима */
         .fullscreen-btn {
+            flex: none;
             position: fixed;
             bottom: 20px;
             right: 20px;
@@ -44,6 +45,7 @@
             display: flex;
             gap: 8px;
             margin-bottom: 20px;
+            flex-wrap: wrap;
         }
         .menu button {
             flex: 1;
@@ -57,8 +59,8 @@
         }
         .gallery {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); /* увеличена минимальная ширина колонки */
-            gap: 16px; /* немного увеличен отступ */
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 16px;
         }
         .card {
             background: var(--tg-theme-secondary-bg-color, #f0f0f0);
@@ -73,13 +75,13 @@
         }
         .card img {
             width: 95%;
-            height: 300px; /* увеличена высота в 2 раза */
+            height: 300px;
             object-fit: cover;
             display: block;
         }
         .card .info {
-            padding: 12px; /* немного увеличен внутренний отступ */
-            font-size: 16px; /* чуть крупнее текст */
+            padding: 12px;
+            font-size: 16px;
         }
         .card .value {
             font-weight: bold;
@@ -148,20 +150,18 @@
     </style>
 </head>
 <body>
-    <!-- Содержимое такое же, как и раньше -->
     <div class="menu">
         <button id="topAnimeBtn">Топ аниме</button>
         <button id="topRealBtn">Топ фото</button>
         <button id="savedBtn">Сохраненные</button>
-        <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
     </div>
+    <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
     <div id="gallery" class="gallery">
         <div class="loading">Загрузка...</div>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        // Весь JavaScript без изменений
         const tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -247,35 +247,34 @@
             }
         });
 
-        // Функция запроса полноэкранного режима
-        function requestFullscreen() {
-            if (tg.isVersionAtLeast('8.0')) { // проверяем, поддерживается ли функция
-                tg.requestFullscreen();
-            } else {
+        // ========== Полноэкранный режим ==========
+        let fullscreenActive = false;
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+
+        function updateFullscreenButton() {
+            fullscreenBtn.textContent = fullscreenActive ? '⛶ Свернуть' : '⛶ На весь экран';
+        }
+
+        function toggleFullscreen() {
+            if (!tg.isVersionAtLeast('8.0')) {
                 alert('Полноэкранный режим не поддерживается в вашей версии Telegram');
+                return;
             }
-        }
-
-        // Функция выхода из полноэкранного режима (опционально)
-        function exitFullscreen() {
-            if (tg.isVersionAtLeast('8.0')) {
+            if (fullscreenActive) {
                 tg.exitFullscreen();
+            } else {
+                tg.requestFullscreen();
             }
         }
 
-        // Обработчик нажатия на кнопку
-        document.getElementById('fullscreenBtn').addEventListener('click', () => {
-            requestFullscreen();
+        fullscreenBtn.addEventListener('click', toggleFullscreen);
+
+        tg.onEvent('fullscreenChanged', () => {
+            fullscreenActive = tg.isFullscreen;
+            updateFullscreenButton();
         });
 
-        // Отслеживание изменения состояния полноэкранного режима
-        tg.onEvent('fullscreenChanged', () => {
-            if (tg.isFullscreen) {
-                console.log('Приложение в полноэкранном режиме');
-            } else {
-                console.log('Приложение вышло из полноэкранного режима');
-            }
-        });
+        updateFullscreenButton();
     </script>
 
     <!-- Модальное окно -->
