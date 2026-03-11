@@ -51,6 +51,9 @@ class BotController:
 		self.sending_picture: Dict[int, bool] = {}			   # chat_id -> флаг, выполняется ли сейчас отправка картинки
 
 		self._register_handlers()
+		# Инициализация БД для истории сообщений
+		database.init_db()
+		self._load_message_history_from_db()
 
 
 	def _register_handlers(self) -> None:
@@ -70,23 +73,31 @@ class BotController:
 		]
 		await self.bot.set_my_commands(commands)
 
-
 	async def send_and_track(
-		self,
-		chat_id: int,
-		text: Optional[str] = None,
-		photo=None,
-		reply_markup: Optional[InlineKeyboardMarkup] = None,
-		track: bool = True,
+			self,
+			chat_id: int,
+			text: Optional[str] = None,
+			photo=None,
+			reply_markup: Optional[InlineKeyboardMarkup] = None,
+			track: bool = True,
 	) -> types.Message:
-		history = self.message_history.get(chat_id, [])
-		if track and len(history) >= 10:
-			oldest_id = history.pop(0)
-			try:
-				await self.bot.delete_message(chat_id, oldest_id)
-			except Exception as e:
-				print(f"Не удалось удалить самое старое сообщение {oldest_id}: {e}")
+		# Проверяем лимит и удаляем самое старое, если нужно
+		if track:
+			count = database.count_messages(chat_id)
+			if count >= 10:
+				oldest_id = database.get_oldest_message(chat_id)
+				if oldest_id:
+					try:
+						await self.bot.delete_message(chat_id, oldest_id)
+					except Exception as e:
+						print(f"Не удалось удалить самое старое сообщение {oldest_id}: {e}")
+					# В любом случае удаляем запись из БД
+					database.delete_message_record(chat_id, oldest_id)
+					# Также удаляем из in-memory списка
+					if chat_id in self.message_history and oldest_id in self.message_history[chat_id]:
+						self.message_history[chat_id].remove(oldest_id)
 
+		# Отправка сообщения
 		if photo:
 			sent = await self.bot.send_photo(
 				chat_id,
@@ -102,16 +113,26 @@ class BotController:
 				reply_markup=reply_markup,
 			)
 
+		# Если нужно отслеживать – сохраняем в БД и в память
 		if track:
-			history.append(sent.message_id)
-			self.message_history[chat_id] = history
+			database.add_message_record(chat_id, sent.message_id)
+			self.message_history.setdefault(chat_id, []).append(sent.message_id)
 
 		return sent
-
 
 	def remove_from_history(self, chat_id: int, message_id: int) -> None:
 		if chat_id in self.message_history and message_id in self.message_history[chat_id]:
 			self.message_history[chat_id].remove(message_id)
+		# Удаляем из БД в любом случае
+		database.delete_message_record(chat_id, message_id)
+
+	def _load_message_history_from_db(self):
+		"""Восстанавливает message_history из базы данных."""
+		db_history = database.load_all_message_history()
+		for chat_id, msg_ids in db_history.items():
+			# Оставляем только последние 10 (на случай, если в БД больше)
+			self.message_history[chat_id] = msg_ids[-10:]
+		print(f"[INFO] Loaded message history for {len(self.message_history)} chats")
 
 
 	async def edit_message_to_save_button(self, chat_id: int, message_id: int, image_id: int) -> None:
