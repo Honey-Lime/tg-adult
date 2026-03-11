@@ -1,20 +1,18 @@
-# database.py
 import psycopg2
 from psycopg2 import pool
 from config_reader import config
 import os
-import time  # <-- добавлен импорт
 
 # Базовая директория проекта (там, где лежит database.py)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGE_DIR_ANIME = os.path.join(BASE_DIR, 'images', 'anime')
 IMAGE_DIR_REAL = os.path.join(BASE_DIR, 'images', 'real')
 
-# Создаём пул соединений (это эффективнее, чем открывать/закрывать соединение на каждый запрос)
+# Создаём пул соединений
 try:
 	connection_pool = psycopg2.pool.SimpleConnectionPool(
-		1,  # минимальное количество соединений в пуле
-		10, # максимальное
+		1,
+		10,
 		database=config.db_name,
 		user=config.db_user,
 		password=config.db_password.get_secret_value(),
@@ -28,26 +26,20 @@ except Exception as e:
 	connection_pool = None
 
 def get_connection():
-	"""Получить соединение из пула"""
 	if connection_pool:
 		return connection_pool.getconn()
 	return None
 
 def return_connection(conn):
-	"""Вернуть соединение обратно в пул"""
 	if connection_pool and conn:
 		connection_pool.putconn(conn)
 
 def close_all_connections():
-	"""Закрыть все соединения (при остановке бота)"""
 	if connection_pool:
 		connection_pool.closeall()
 
 
-
-
 def add_post_record(pic_type, date):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return False
@@ -60,8 +52,6 @@ def add_post_record(pic_type, date):
 			""", (pic_type, date))
 			post_id = cur.fetchone()[0]
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] add_post_record: {elapsed:.3f}s")
 			return post_id
 	except Exception as e:
 		print(f"Error adding post record {date}: {e}")
@@ -71,7 +61,6 @@ def add_post_record(pic_type, date):
 		return_connection(conn)
 
 def add_picture_record(pic_type, post_id, filename):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return False
@@ -82,8 +71,6 @@ def add_picture_record(pic_type, post_id, filename):
 				VALUES (%s, %s, %s)
 			""", (pic_type, post_id, filename))
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] add_picture_record: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error adding picture record {filename}: {e}")
@@ -93,7 +80,6 @@ def add_picture_record(pic_type, post_id, filename):
 		return_connection(conn)
 
 def get_user(user_id):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return None
@@ -103,8 +89,6 @@ def get_user(user_id):
 			row = cur.fetchone()
 			if row:
 				columns = [desc[0] for desc in cur.description]
-				elapsed = time.perf_counter() - start
-				print(f"[TIMING] get_user (existing): {elapsed:.3f}s")
 				return dict(zip(columns, row))
 
 			cur.execute("INSERT INTO users (id) VALUES (%s) ON CONFLICT (id) DO NOTHING", (user_id,))
@@ -113,12 +97,8 @@ def get_user(user_id):
 			row = cur.fetchone()
 			if row:
 				columns = [desc[0] for desc in cur.description]
-				elapsed = time.perf_counter() - start
-				print(f"[TIMING] get_user (new): {elapsed:.3f}s")
 				return dict(zip(columns, row))
 			else:
-				elapsed = time.perf_counter() - start
-				print(f"[TIMING] get_user (failed): {elapsed:.3f}s")
 				return None
 	except Exception as e:
 		print(f"Error getting user {user_id}: {e}")
@@ -128,7 +108,6 @@ def get_user(user_id):
 		return_connection(conn)
 
 def user_set_type(user_id, type):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return False
@@ -140,8 +119,6 @@ def user_set_type(user_id, type):
 				WHERE id = %s
 			""", (type, user_id))
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] user_set_type: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error set type for user: {user_id}: {e}")
@@ -151,7 +128,6 @@ def user_set_type(user_id, type):
 		return_connection(conn)
 
 def user_set_cycle(user_id, cycle):
-	start = time.perf_counter()
 	if cycle == 0:
 		new_cycle = 1
 	else:
@@ -167,8 +143,6 @@ def user_set_cycle(user_id, cycle):
 				WHERE id = %s
 			""", (new_cycle, user_id))
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] user_set_cycle: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error set type for user: {user_id}: {e}")
@@ -178,7 +152,6 @@ def user_set_cycle(user_id, cycle):
 		return_connection(conn)
 
 def user_watched_image(user_id, image):
-	start = time.perf_counter()
 	if image['type'] == 0:
 		viewed_name = 'viewed_anime'
 	else:
@@ -196,8 +169,6 @@ def user_watched_image(user_id, image):
 			"""
 			cur.execute(query, (image['id'], image['id'], user_id))
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] user_watched_image: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error updating watched for user {user_id}: {e}")
@@ -207,18 +178,15 @@ def user_watched_image(user_id, image):
 		return_connection(conn)
 
 def get_good_images(type):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"SELECT * FROM pictures WHERE type = {type} ORDER BY value DESC OFFSET 100")
+			cur.execute(f"SELECT * FROM pictures WHERE type = {type} and need_moderate = false ORDER BY value DESC OFFSET 100")
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] get_good_images: {elapsed:.3f}s (rows={len(result)})")
 			return result
 	except Exception as e:
 		print(f"Error getting all images: {e}")
@@ -227,18 +195,15 @@ def get_good_images(type):
 		return_connection(conn)
 
 def get_noname_images(type):
-	start = time.perf_counter()
 	conn = get_connection()
 	if not conn:
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"SELECT * FROM pictures WHERE value > -10 and type = {type} ORDER BY total ASC")
+			cur.execute(f"SELECT * FROM pictures WHERE value > -10 and type = {type} and need_moderate = false ORDER BY total ASC")
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] get_noname_images: {elapsed:.3f}s (rows={len(result)})")
 			return result
 	except Exception as e:
 		print(f"Error getting all images: {e}")
@@ -246,8 +211,44 @@ def get_noname_images(type):
 	finally:
 		return_connection(conn)
 
+def get_not_real_type(image_id):
+	"""Возвращает текущее значение поля not_real_type для изображения."""
+	conn = get_connection()
+	if not conn:
+		return None
+	try:
+		with conn.cursor() as cur:
+			cur.execute("SELECT not_real_type FROM pictures WHERE id = %s", (image_id,))
+			row = cur.fetchone()
+			return row[0] if row else None
+	except Exception as e:
+		print(f"Error getting not_real_type: {e}")
+		return None
+	finally:
+		return_connection(conn)
+
+def set_not_real_type(image_id, value):
+	"""Устанавливает not_real_type = value для указанного изображения."""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("UPDATE pictures SET not_real_type = %s WHERE id = %s", (value, image_id))
+			conn.commit()
+			return True
+	except Exception as e:
+		print(f"Error setting not_real_type: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
 def toggle_type(user_id):
-	start = time.perf_counter()
+	"""
+	Переключает тип текущего изображения и сбрасывает not_real_type в false.
+	Возвращает сообщение для пользователя.
+	"""
 	user = get_user(user_id)
 	if not user:
 		return "Пользователь не найден"
@@ -259,14 +260,16 @@ def toggle_type(user_id):
 		return "Ошибка подключения"
 	try:
 		with conn.cursor() as cur:
-			cur.execute("UPDATE pictures SET type = 1 - type WHERE id = %s", (image_id,))
+			# Меняем тип и сбрасываем not_real_type
+			cur.execute("""
+				UPDATE pictures
+				SET type = 1 - type,
+					not_real_type = false
+				WHERE id = %s
+			""", (image_id,))
 			conn.commit()
 			if cur.rowcount == 0:
-				elapsed = time.perf_counter() - start
-				print(f"[TIMING] toggle_type (not found): {elapsed:.3f}s")
 				return "Изображение не найдено"
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] toggle_type: {elapsed:.3f}s")
 			return "Тип успешно изменён"
 	except Exception as e:
 		print(f"Error toggling type: {e}")
@@ -275,9 +278,7 @@ def toggle_type(user_id):
 	finally:
 		return_connection(conn)
 
-
 def set_need_moderate(image_id):
-	"""Устанавливает need_moderate = true для указанного изображения."""
 	conn = get_connection()
 	if not conn:
 		return False
@@ -293,12 +294,7 @@ def set_need_moderate(image_id):
 	finally:
 		return_connection(conn)
 
-
 def add_saved_image(user_id, image_id):
-	"""
-	Добавляет image_id в массив saved_images пользователя и списывает 5 монет.
-	Возвращает True при успехе, False если недостаточно монет или ошибка.
-	"""
 	conn = get_connection()
 	if not conn:
 		return False
@@ -322,15 +318,17 @@ def add_saved_image(user_id, image_id):
 	finally:
 		return_connection(conn)
 
-
-def save_and_like(user_id, image_id):
-	"""Сохраняет изображение: добавляет в saved_images, списывает монеты, добавляет в просмотренные, ставит двойной лайк."""
+def save(user_id, image_id):
+	"""
+	Сохраняет изображение: добавляет в saved_images, списывает 5 монет,
+	добавляет в просмотренные (viewed_*) и увеличивает value на 1.
+	Возвращает True при успехе, False при недостатке монет или ошибке.
+	"""
 	conn = get_connection()
 	if not conn:
 		return False
 	try:
 		with conn.cursor() as cur:
-			# Определяем тип изображения
 			cur.execute("SELECT type FROM pictures WHERE id = %s", (image_id,))
 			pic = cur.fetchone()
 			if not pic:
@@ -355,23 +353,26 @@ def save_and_like(user_id, image_id):
 
 			cur.execute("""
 				UPDATE pictures
-				SET likes = likes + 2,
-					total = total + 1,
-					value = value + 2
+				SET value = value + 1
 				WHERE id = %s
 			""", (image_id,))
+
+			# Логируем состояние картинки после сохранения
+			cur.execute("SELECT likes, dislikes, total, value FROM pictures WHERE id = %s", (image_id,))
+			stats = cur.fetchone()
+			if stats:
+				print(f"[IMAGE] save: id={image_id}, likes={stats[0]}, dislikes={stats[1]}, total={stats[2]}, value={stats[3]}")
+
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error in save_and_like: {e}")
+		print(f"Error in save: {e}")
 		conn.rollback()
 		return False
 	finally:
 		return_connection(conn)
 
-
 def like(user_id):
-	start = time.perf_counter()
 	user = get_user(user_id)
 	if not user:
 		return False
@@ -405,12 +406,17 @@ def like(user_id):
 			if cur.rowcount == 0:
 				conn.rollback()
 				return False
-			# Начисляем монету
+
 			cur.execute("UPDATE users SET coins = coins + 1 WHERE id = %s", (user_id,))
 			cur.execute("UPDATE users SET last_watched = NULL WHERE id = %s", (user_id,))
+
+			# Логируем состояние картинки после лайка
+			cur.execute("SELECT likes, dislikes, total, value FROM pictures WHERE id = %s", (image_id,))
+			stats = cur.fetchone()
+			if stats:
+				print(f"[IMAGE] like: id={image_id}, likes={stats[0]}, dislikes={stats[1]}, total={stats[2]}, value={stats[3]}")
+
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] like: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error liking: {e}")
@@ -419,9 +425,7 @@ def like(user_id):
 	finally:
 		return_connection(conn)
 
-
 def dislike(user_id):
-	start = time.perf_counter()
 	user = get_user(user_id)
 	if not user:
 		return False
@@ -449,12 +453,17 @@ def dislike(user_id):
 			if cur.rowcount == 0:
 				conn.rollback()
 				return False
-			# Начисляем монету
+
 			cur.execute("UPDATE users SET coins = coins + 1 WHERE id = %s", (user_id,))
 			cur.execute("UPDATE users SET last_watched = NULL WHERE id = %s", (user_id,))
+
+			# Логируем состояние картинки после дизлайка
+			cur.execute("SELECT likes, dislikes, total, value FROM pictures WHERE id = %s", (image_id,))
+			stats = cur.fetchone()
+			if stats:
+				print(f"[IMAGE] dislike: id={image_id}, likes={stats[0]}, dislikes={stats[1]}, total={stats[2]}, value={stats[3]}")
+
 			conn.commit()
-			elapsed = time.perf_counter() - start
-			print(f"[TIMING] dislike: {elapsed:.3f}s")
 		return True
 	except Exception as e:
 		print(f"Error disliking: {e}")
@@ -464,12 +473,30 @@ def dislike(user_id):
 		return_connection(conn)
 
 
+def add_coins(user_id, amount):
+	"""
+	Добавляет указанное количество монет пользователю.
+	Возвращает True при успехе.
+	"""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("UPDATE users SET coins = coins + %s WHERE id = %s", (amount, user_id))
+			conn.commit()
+			return True
+	except Exception as e:
+		print(f"Error adding coins: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
 def get_image(user_id):
-	start = time.perf_counter()
 	user = get_user(user_id)
 	if not user:
-		elapsed = time.perf_counter() - start
-		print(f"[TIMING] get_image (no user): {elapsed:.3f}s")
 		return None, None
 
 	if user['type'] == 0:
@@ -501,10 +528,10 @@ def get_image(user_id):
 					finally:
 						return_connection(conn)
 				user_set_cycle(user_id, user['cycle'])
-				elapsed = time.perf_counter() - start
-				print(f"[TIMING] get_image (found): {elapsed:.3f}s")
+
+				# Логируем выдачу картинки
+				print(f"[IMAGE] выдана: id={img['id']}, likes={img['likes']}, dislikes={img['dislikes']}, total={img['total']}, value={img['value']}")
 				return full_path, img
 
-	elapsed = time.perf_counter() - start
-	print(f"[TIMING] get_image (none): {elapsed:.3f}s")
+	print(f"User {user_id} has no available images with existing files")
 	return None, None

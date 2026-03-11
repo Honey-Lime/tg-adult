@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Gallery</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 16px;
+            background: var(--tg-theme-bg-color, #fff);
+            color: var(--tg-theme-text-color, #000);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        .menu {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        .menu button {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: var(--tg-theme-button-color, #2481cc);
+            color: var(--tg-theme-button-text-color, #fff);
+            font-size: 16px;
+            cursor: pointer;
+        }
+        .gallery {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+            gap: 12px;
+        }
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            display: block;
+        }
+        .card .info {
+            padding: 8px;
+            font-size: 14px;
+        }
+        .card .value {
+            font-weight: bold;
+            color: var(--tg-theme-link-color, #2481cc);
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="menu">
+        <button id="topBtn">ТОП 100</button>
+        <button id="savedBtn">Сохраненные</button>
+    </div>
+    <div id="gallery" class="gallery">
+        <div class="loading">Загрузка...</div>
+    </div>
+
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const userId = urlParams.get('user_id');
+
+        const gallery = document.getElementById('gallery');
+        const topBtn = document.getElementById('topBtn');
+        const savedBtn = document.getElementById('savedBtn');
+
+        async function loadImages(endpoint) {
+            gallery.innerHTML = '<div class="loading">Загрузка...</div>';
+            try {
+                const response = await fetch(endpoint);
+                const images = await response.json();
+                renderGallery(images);
+            } catch (error) {
+                gallery.innerHTML = '<div class="loading">Ошибка загрузки</div>';
+                console.error(error);
+            }
+        }
+
+        function renderGallery(images) {
+            if (images.length === 0) {
+                gallery.innerHTML = '<div class="loading">Нет изображений</div>';
+                return;
+            }
+            const html = images.map(img => {
+                const typeText = img.type === 0 ? 'Аниме' : 'Фото';
+                return `
+                    <div class="card">
+                        <img src="${img.path}" alt="Image ${img.id}" loading="lazy">
+                        <div class="info">
+                            <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
+                            <div class="value">⭐ ${img.value}</div>
+                            <div>${typeText}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            gallery.innerHTML = html;
+        }
+
+        topBtn.addEventListener('click', () => {
+            loadImages('/api/top');
+        });
+
+        savedBtn.addEventListener('click', () => {
+            if (!userId) {
+                gallery.innerHTML = '<div class="loading">Ошибка: не удалось определить пользователя</div>';
+                return;
+            }
+            loadImages(`/api/saved?user_id=${userId}`);
+        });
+
+        // Загружаем топ по умолчанию
+        loadImages('/api/top');
+    </script>
+</body>
+</html>

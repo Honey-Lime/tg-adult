@@ -1,6 +1,25 @@
 # Images
-/images/
+images/
 anime/
+
+# Виртуальные окружения
+venv/
+bot/venv/
+miniapp/venv/
+
+# Файлы с секретами
+bot/.env
+miniapp/.env
+
+# Кеш Python
+__pycache__/
+*.pyc
+
+# Базы данных (если есть)
+*.db
+
+# Логи
+*.log
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
