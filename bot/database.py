@@ -82,117 +82,117 @@ def add_picture_record(pic_type, post_id, filename):
 
 
 def init_db():
-    """Создаёт таблицу message_history, если её нет."""
-    conn = get_connection()
-    if not conn:
-        return
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                CREATE TABLE IF NOT EXISTS message_history (
-                    id SERIAL PRIMARY KEY,
-                    chat_id BIGINT NOT NULL,
-                    message_id BIGINT NOT NULL,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                );
-                CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id);
-            """)
-            conn.commit()
-    except Exception as e:
-        print(f"Error creating message_history table: {e}")
-    finally:
-        return_connection(conn)
+	"""Создаёт таблицу message_history, если её нет."""
+	conn = get_connection()
+	if not conn:
+		return
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				CREATE TABLE IF NOT EXISTS message_history (
+					id SERIAL PRIMARY KEY,
+					chat_id BIGINT NOT NULL,
+					message_id BIGINT NOT NULL,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id);
+			""")
+			conn.commit()
+	except Exception as e:
+		print(f"Error creating message_history table: {e}")
+	finally:
+		return_connection(conn)
 
 def add_message_record(chat_id, message_id):
-    conn = get_connection()
-    if not conn:
-        return False
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                INSERT INTO message_history (chat_id, message_id)
-                VALUES (%s, %s)
-            """, (chat_id, message_id))
-            conn.commit()
-            return True
-    except Exception as e:
-        print(f"Error adding message record: {e}")
-        conn.rollback()
-        return False
-    finally:
-        return_connection(conn)
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				INSERT INTO message_history (chat_id, message_id)
+				VALUES (%s, %s)
+			""", (chat_id, message_id))
+			conn.commit()
+			return True
+	except Exception as e:
+		print(f"Error adding message record: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
 
 def delete_message_record(chat_id, message_id):
-    conn = get_connection()
-    if not conn:
-        return False
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                DELETE FROM message_history
-                WHERE chat_id = %s AND message_id = %s
-            """, (chat_id, message_id))
-            conn.commit()
-            return True
-    except Exception as e:
-        print(f"Error deleting message record: {e}")
-        conn.rollback()
-        return False
-    finally:
-        return_connection(conn)
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				DELETE FROM message_history
+				WHERE chat_id = %s AND message_id = %s
+			""", (chat_id, message_id))
+			conn.commit()
+			return True
+	except Exception as e:
+		print(f"Error deleting message record: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
 
 def count_messages(chat_id):
-    conn = get_connection()
-    if not conn:
-        return 0
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT COUNT(*) FROM message_history WHERE chat_id = %s", (chat_id,))
-            return cur.fetchone()[0]
-    except Exception as e:
-        print(f"Error counting messages: {e}")
-        return 0
-    finally:
-        return_connection(conn)
+	conn = get_connection()
+	if not conn:
+		return 0
+	try:
+		with conn.cursor() as cur:
+			cur.execute("SELECT COUNT(*) FROM message_history WHERE chat_id = %s", (chat_id,))
+			return cur.fetchone()[0]
+	except Exception as e:
+		print(f"Error counting messages: {e}")
+		return 0
+	finally:
+		return_connection(conn)
 
 def get_oldest_message(chat_id):
-    conn = get_connection()
-    if not conn:
-        return None
-    try:
-        with conn.cursor() as cur:
-            cur.execute("""
-                SELECT message_id FROM message_history
-                WHERE chat_id = %s
-                ORDER BY created_at ASC
-                LIMIT 1
-            """, (chat_id,))
-            row = cur.fetchone()
-            return row[0] if row else None
-    except Exception as e:
-        print(f"Error getting oldest message: {e}")
-        return None
-    finally:
-        return_connection(conn)
+	conn = get_connection()
+	if not conn:
+		return None
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				SELECT message_id FROM message_history
+				WHERE chat_id = %s
+				ORDER BY created_at ASC
+				LIMIT 1
+			""", (chat_id,))
+			row = cur.fetchone()
+			return row[0] if row else None
+	except Exception as e:
+		print(f"Error getting oldest message: {e}")
+		return None
+	finally:
+		return_connection(conn)
 
 def load_all_message_history():
-    """Загружает всю историю сообщений из БД в виде словаря {chat_id: [message_id, ...]}"""
-    conn = get_connection()
-    if not conn:
-        return {}
-    try:
-        with conn.cursor() as cur:
-            cur.execute("SELECT chat_id, message_id FROM message_history ORDER BY created_at ASC")
-            rows = cur.fetchall()
-            history = {}
-            for chat_id, msg_id in rows:
-                history.setdefault(chat_id, []).append(msg_id)
-            return history
-    except Exception as e:
-        print(f"Error loading message history: {e}")
-        return {}
-    finally:
-        return_connection(conn)
+	"""Загружает всю историю сообщений из БД в виде словаря {chat_id: [message_id, ...]}"""
+	conn = get_connection()
+	if not conn:
+		return {}
+	try:
+		with conn.cursor() as cur:
+			cur.execute("SELECT chat_id, message_id FROM message_history ORDER BY created_at ASC")
+			rows = cur.fetchall()
+			history = {}
+			for chat_id, msg_id in rows:
+				history.setdefault(chat_id, []).append(msg_id)
+			return history
+	except Exception as e:
+		print(f"Error loading message history: {e}")
+		return {}
+	finally:
+		return_connection(conn)
 
 
 def get_all_users_stats():
@@ -429,6 +429,58 @@ def user_watched_image(user_id, image):
 		return False
 	finally:
 		return_connection(conn)
+
+
+def get_images_for_moderation():
+    """Возвращает список изображений, у которых need_moderate = true."""
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT * FROM pictures WHERE need_moderate = true ORDER BY id")
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+            result = [dict(zip(columns, row)) for row in rows]
+            return result
+    except Exception as e:
+        print(f"Error getting images for moderation: {e}")
+        return []
+    finally:
+        return_connection(conn)
+
+def delete_image(image_id):
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM pictures WHERE id = %s", (image_id,))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error deleting image {image_id}: {e}")
+        conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
+
+def clear_moderation(image_id):
+    """Снимает флаг need_moderate с изображения."""
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE pictures SET need_moderate = false WHERE id = %s", (image_id,))
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"Error clearing moderation for image {image_id}: {e}")
+        conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
 
 
 def get_good_images(type):

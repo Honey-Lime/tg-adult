@@ -45,6 +45,8 @@ class BotController:
 		self.last_image_data: Dict[int, dict] = {}			   # chat_id -> данные последней картинки (id, type, ...)
 		self.last_image_message_id: Dict[int, int] = {}		  # chat_id -> message_id последней картинки
 		self.user_processing: Dict[int, bool] = {}			   # chat_id -> флаг обработки (защита от повторных нажатий)
+		self.moderation_queues: Dict[int, List[dict]] = {}
+		self.last_moderation_message_id: Dict[int, int] = {}
 
 		# +++ Защита от спама +++
 		self.last_picture_time: Dict[int, float] = {}			# chat_id -> время последней отправки картинки (для rate limit)
@@ -232,7 +234,6 @@ class BotController:
 		])
 		await message.answer("Нажмите кнопку, чтобы открыть мини-приложение:", reply_markup=keyboard)
 
-
 	async def cmd_admin(self, message: Message) -> None:
 		chat_id = message.chat.id
 		if chat_id not in self.admin_ids:
@@ -240,10 +241,57 @@ class BotController:
 			return
 
 		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")]
+			[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
+			[InlineKeyboardButton(text="🛡 Модерация", callback_data="admin_moderation")]
 		])
 		await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard)
 
+	async def show_moderation_image(self, chat_id: int, current_message_id: int = None):
+		if current_message_id:
+			await self.delete_current(chat_id, current_message_id)
+		images = database.get_images_for_moderation()
+		if not images:
+			await self.send_and_track(chat_id, text="✅ Нет изображений на модерации.", track=False)
+			return
+		self.moderation_queues[chat_id] = images
+		await self.send_next_moderation_image(chat_id)
+
+	async def send_next_moderation_image(self, chat_id: int):
+		# Удаляем предыдущее сообщение модерации, если есть
+		if chat_id in self.last_moderation_message_id:
+			try:
+				await self.bot.delete_message(chat_id, self.last_moderation_message_id[chat_id])
+			except:
+				pass
+			del self.last_moderation_message_id[chat_id]
+
+		if chat_id not in self.moderation_queues or not self.moderation_queues[chat_id]:
+			images = database.get_images_for_moderation()
+			if not images:
+				await self.send_and_track(chat_id, text="✅ Нет изображений на модерации.", track=False)
+				return
+			self.moderation_queues[chat_id] = images
+
+		image = self.moderation_queues[chat_id][0]
+		remaining = len(self.moderation_queues[chat_id]) - 1
+
+		base_path = database.IMAGE_DIR_ANIME if image['type'] == 0 else database.IMAGE_DIR_REAL
+		full_path = os.path.join(base_path, image['path'])
+
+		if not os.path.isfile(full_path):
+			# Файл отсутствует – удаляем из очереди и пропускаем
+			self.moderation_queues[chat_id].pop(0)
+			await self.send_next_moderation_image(chat_id)
+			return
+
+		caption = f"🛡 Модерация: {image['id']}\nОсталось: {remaining}"
+		keyboard = InlineKeyboardMarkup(inline_keyboard=[
+			[InlineKeyboardButton(text="❌ Удалить", callback_data=f"mod_delete_{image['id']}"),
+			 InlineKeyboardButton(text="✅ Восстановить", callback_data=f"mod_restore_{image['id']}")]
+		])
+		image_file = FSInputFile(full_path)
+		sent = await self.send_and_track(chat_id, photo=image_file, text=caption, reply_markup=keyboard)
+		self.last_moderation_message_id[chat_id] = sent.message_id
 
 	# ==================== ОБРАБОТЧИК КОЛБЭКОВ ====================
 
@@ -365,6 +413,42 @@ class BotController:
 						text="❌ Ошибка при сохранении",
 						track=False,
 					)
+
+			elif callback.data == "admin_moderation":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					await self.delete_current(chat_id, message_id)
+					return
+				await self.show_moderation_image(chat_id, message_id)
+
+			elif callback.data.startswith("mod_delete_"):
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+				image_id = int(callback.data.split('_')[2])
+				success = database.delete_image(image_id)
+				if success:
+					await callback.answer("🗑 Изображение удалено")
+				else:
+					await callback.answer("❌ Ошибка при удалении")
+				# Убираем текущее изображение из очереди
+				if chat_id in self.moderation_queues and self.moderation_queues[chat_id]:
+					self.moderation_queues[chat_id].pop(0)
+				await self.send_next_moderation_image(chat_id)
+
+			elif callback.data.startswith("mod_restore_"):
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+				image_id = int(callback.data.split('_')[2])
+				success = database.clear_moderation(image_id)
+				if success:
+					await callback.answer("✅ Изображение восстановлено")
+				else:
+					await callback.answer("❌ Ошибка при восстановлении")
+				if chat_id in self.moderation_queues and self.moderation_queues[chat_id]:
+					self.moderation_queues[chat_id].pop(0)
+				await self.send_next_moderation_image(chat_id)
 
 
 			# --- Жалоба (открывает меню выбора причины) ---
