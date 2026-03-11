@@ -164,8 +164,8 @@ def get_user(user_id, referrer_id=None):
 
 def get_or_create_user(user_id, referrer_id=None):
 	"""
-	Аналогично get_user, но возвращает кортеж (user_dict, created)
-	где created=True если пользователь только что создан.
+	Получает пользователя по id. Если не существует – создаёт и начисляет бонус рефереру.
+	Возвращает кортеж (user_dict, created), где created=True если пользователь только что создан.
 	"""
 	conn = get_connection()
 	if not conn:
@@ -180,7 +180,7 @@ def get_or_create_user(user_id, referrer_id=None):
 				print(f"[DEBUG] User {user_id} already exists")
 				return dict(zip(columns, row)), False
 
-			# Пользователь не найден – вставляем с явным указанием coins = 0
+			# Пользователь не найден – вставляем
 			if referrer_id is not None:
 				cur.execute("""
 					INSERT INTO users (id, referrer_id, coins)
@@ -198,15 +198,17 @@ def get_or_create_user(user_id, referrer_id=None):
 
 			inserted = cur.fetchone()
 			if inserted:
-				conn.commit()  # нужно закоммитить, чтобы видеть изменения
 				print(f"[DEBUG] New user inserted: {user_id}")
 				if referrer_id is not None:
-					# Начисляем монеты рефереру
-					success = add_coins(referrer_id, 250)
-					if success:
-						print(f"[INFO] Referrer {referrer_id} awarded 250 coins for new user {user_id}")
+					# Начисляем монеты рефереру в той же транзакции
+					cur.execute("UPDATE users SET coins = coins + 250 WHERE id = %s", (referrer_id,))
+					if cur.rowcount == 0:
+						print(f"[ERROR] Referrer {referrer_id} not found, cannot award coins")
+						conn.rollback()
+						return None, False
 					else:
-						print(f"[ERROR] Failed to award coins to referrer {referrer_id}")
+						print(f"[INFO] Referrer {referrer_id} awarded 250 coins for new user {user_id}")
+				conn.commit()
 				# Получаем данные свежесозданного пользователя
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
@@ -214,9 +216,8 @@ def get_or_create_user(user_id, referrer_id=None):
 					columns = [desc[0] for desc in cur.description]
 					return dict(zip(columns, row)), True
 			else:
-				# Это может случиться при гонке, но тогда запрос на поиск выше вернул бы пользователя.
-				# На всякий случай повторяем поиск.
-				print(f"[DEBUG] User {user_id} was not inserted (maybe race condition), re-fetching...")
+				# Конкурентная вставка – повторяем поиск
+				print(f"[DEBUG] User {user_id} was not inserted (race condition), re-fetching...")
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
 				if row:
