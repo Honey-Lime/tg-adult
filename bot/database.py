@@ -363,8 +363,7 @@ def get_or_create_user(user_id, referrer_id=None):
 				columns = [desc[0] for desc in cur.description]
 				return dict(zip(columns, row)), False
 
-			created = False
-			# Пользователь не найден – вставляем с рефералом или без
+			# Пользователь не найден – вставляем
 			if referrer_id is not None:
 				cur.execute("""
 					INSERT INTO users (id, referrer_id)
@@ -382,18 +381,29 @@ def get_or_create_user(user_id, referrer_id=None):
 
 			inserted = cur.fetchone()
 			if inserted:
-				created = True
+				conn.commit()  # нужно закоммитить, чтобы видеть изменения
 				if referrer_id is not None:
-					add_coins(referrer_id, 250)
-
-			# Получаем данные пользователя (теперь он точно есть)
-			cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
-			row = cur.fetchone()
-			if row:
-				columns = [desc[0] for desc in cur.description]
-				return dict(zip(columns, row)), created
+					# Начисляем монеты рефереру
+					success = add_coins(referrer_id, 250)
+					if success:
+						print(f"Рефереру {referrer_id} начислено 250 монет за нового пользователя {user_id}")
+					else:
+						print(f"Ошибка начисления монет рефереру {referrer_id}")
+				# Получаем данные свежесозданного пользователя
+				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+				row = cur.fetchone()
+				if row:
+					columns = [desc[0] for desc in cur.description]
+					return dict(zip(columns, row)), True
 			else:
-				return None, False
+				# Это может случиться при гонке, но тогда запрос на поиск выше вернул бы пользователя.
+				# На всякий случай повторяем поиск.
+				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+				row = cur.fetchone()
+				if row:
+					columns = [desc[0] for desc in cur.description]
+					return dict(zip(columns, row)), False
+			return None, False
 	except Exception as e:
 		print(f"Error in get_or_create_user {user_id}: {e}")
 		conn.rollback()

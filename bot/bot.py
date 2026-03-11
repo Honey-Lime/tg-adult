@@ -180,6 +180,7 @@ class BotController:
 					)
 				except Exception as e:
 					print(f"Не удалось отправить уведомление админу {admin_id}: {e}")
+			print(f"Новый пользователь зарегистрирован: {chat_id}, реферер: {referrer_id}")
 
 		# Удаляем последнюю картинку, если она есть
 		if chat_id in self.last_image_message_id:
