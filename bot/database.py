@@ -177,20 +177,21 @@ def get_or_create_user(user_id, referrer_id=None):
 			row = cur.fetchone()
 			if row:
 				columns = [desc[0] for desc in cur.description]
+				print(f"[DEBUG] User {user_id} already exists")
 				return dict(zip(columns, row)), False
 
-			# Пользователь не найден – вставляем
+			# Пользователь не найден – вставляем с явным указанием coins = 0
 			if referrer_id is not None:
 				cur.execute("""
-					INSERT INTO users (id, referrer_id)
-					VALUES (%s, %s)
+					INSERT INTO users (id, referrer_id, coins)
+					VALUES (%s, %s, 0)
 					ON CONFLICT (id) DO NOTHING
 					RETURNING id
 				""", (user_id, referrer_id))
 			else:
 				cur.execute("""
-					INSERT INTO users (id)
-					VALUES (%s)
+					INSERT INTO users (id, coins)
+					VALUES (%s, 0)
 					ON CONFLICT (id) DO NOTHING
 					RETURNING id
 				""", (user_id,))
@@ -198,13 +199,14 @@ def get_or_create_user(user_id, referrer_id=None):
 			inserted = cur.fetchone()
 			if inserted:
 				conn.commit()  # нужно закоммитить, чтобы видеть изменения
+				print(f"[DEBUG] New user inserted: {user_id}")
 				if referrer_id is not None:
 					# Начисляем монеты рефереру
 					success = add_coins(referrer_id, 250)
 					if success:
-						print(f"Рефереру {referrer_id} начислено 250 монет за нового пользователя {user_id}")
+						print(f"[INFO] Referrer {referrer_id} awarded 250 coins for new user {user_id}")
 					else:
-						print(f"Ошибка начисления монет рефереру {referrer_id}")
+						print(f"[ERROR] Failed to award coins to referrer {referrer_id}")
 				# Получаем данные свежесозданного пользователя
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
@@ -214,6 +216,7 @@ def get_or_create_user(user_id, referrer_id=None):
 			else:
 				# Это может случиться при гонке, но тогда запрос на поиск выше вернул бы пользователя.
 				# На всякий случай повторяем поиск.
+				print(f"[DEBUG] User {user_id} was not inserted (maybe race condition), re-fetching...")
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
 				if row:
@@ -221,7 +224,7 @@ def get_or_create_user(user_id, referrer_id=None):
 					return dict(zip(columns, row)), False
 			return None, False
 	except Exception as e:
-		print(f"Error in get_or_create_user {user_id}: {e}")
+		print(f"[ERROR] Error in get_or_create_user {user_id}: {e}")
 		conn.rollback()
 		return None, False
 	finally:
@@ -595,14 +598,20 @@ def add_coins(user_id, amount):
 	"""
 	conn = get_connection()
 	if not conn:
+		print(f"[ERROR] add_coins: no connection")
 		return False
 	try:
 		with conn.cursor() as cur:
 			cur.execute("UPDATE users SET coins = coins + %s WHERE id = %s", (amount, user_id))
+			if cur.rowcount == 0:
+				print(f"[ERROR] add_coins: user {user_id} not found")
+				conn.rollback()
+				return False
 			conn.commit()
+			print(f"[DEBUG] add_coins: added {amount} to user {user_id}")
 			return True
 	except Exception as e:
-		print(f"Error adding coins: {e}")
+		print(f"[ERROR] add_coins: {e}")
 		conn.rollback()
 		return False
 	finally:
