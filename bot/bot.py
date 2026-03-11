@@ -160,7 +160,7 @@ class BotController:
 		referrer_id = None
 
 		# Ручной разбор аргументов команды
-		if message.text:
+		if message.text and ' ' in message.text:
 			parts = message.text.split(maxsplit=1)
 			if len(parts) == 2 and parts[1].isdigit():
 				referrer_id = int(parts[1])
@@ -169,6 +169,12 @@ class BotController:
 
 		# Получаем пользователя и флаг создания
 		user, created = database.get_or_create_user(chat_id, referrer_id)
+
+		if user is None:
+			# Ошибка при получении/создании пользователя
+			await message.answer("❌ Произошла ошибка при регистрации. Попробуйте позже.")
+			return
+
 		print(user)  # для отладки
 
 		# Если пользователь только что создан – уведомляем админов

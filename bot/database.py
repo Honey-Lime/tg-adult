@@ -167,13 +167,14 @@ def get_or_create_user(user_id, referrer_id=None):
 	Получает пользователя по id. Если не существует – создаёт.
 	Если передан referrer_id и реферер существует, начисляет ему 250 монет.
 	Возвращает кортеж (user_dict, created), где created=True если пользователь только что создан.
+	При ошибке возвращает (None, False).
 	"""
 	conn = get_connection()
 	if not conn:
 		return None, False
 	try:
 		with conn.cursor() as cur:
-			# Пытаемся найти пользователя
+			# Сначала проверяем, существует ли пользователь
 			cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 			row = cur.fetchone()
 			if row:
@@ -181,7 +182,8 @@ def get_or_create_user(user_id, referrer_id=None):
 				print(f"[DEBUG] User {user_id} already exists")
 				return dict(zip(columns, row)), False
 
-			# Проверяем существование реферера
+			# Пользователь не найден, создаём нового
+			# Проверяем существование реферера, если он указан
 			valid_referrer = False
 			if referrer_id is not None:
 				cur.execute("SELECT id FROM users WHERE id = %s", (referrer_id,))
@@ -190,7 +192,7 @@ def get_or_create_user(user_id, referrer_id=None):
 				else:
 					print(f"[WARNING] Referrer {referrer_id} not found, will create user without bonus")
 
-			# Вставляем пользователя (с referrer_id, если он валиден)
+			# Вставка нового пользователя
 			if valid_referrer:
 				cur.execute("""
 					INSERT INTO users (id, referrer_id, coins)
@@ -208,19 +210,22 @@ def get_or_create_user(user_id, referrer_id=None):
 			if inserted:
 				print(f"[DEBUG] New user inserted: {user_id}")
 				if valid_referrer:
-					# Начисляем монеты рефереру
+					# Начисляем бонус рефереру
 					cur.execute("UPDATE users SET coins = coins + 250 WHERE id = %s", (referrer_id,))
 					if cur.rowcount == 0:
 						print(f"[ERROR] Failed to award coins to referrer {referrer_id} (should not happen)")
 					else:
 						print(f"[INFO] Referrer {referrer_id} awarded 250 coins for new user {user_id}")
 				conn.commit()
-				# Получаем данные свежесозданного пользователя
+				# Получаем свежесозданного пользователя
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
 				if row:
 					columns = [desc[0] for desc in cur.description]
 					return dict(zip(columns, row)), True
+				else:
+					print(f"[ERROR] Could not fetch newly created user {user_id}")
+					return None, False
 			else:
 				# Конкурентная вставка – повторяем поиск
 				print(f"[DEBUG] User {user_id} was not inserted (race condition), re-fetching...")
@@ -229,7 +234,8 @@ def get_or_create_user(user_id, referrer_id=None):
 				if row:
 					columns = [desc[0] for desc in cur.description]
 					return dict(zip(columns, row)), False
-			return None, False
+				else:
+					return None, False
 	except Exception as e:
 		print(f"[ERROR] Error in get_or_create_user {user_id}: {e}")
 		conn.rollback()
