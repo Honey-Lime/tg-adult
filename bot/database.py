@@ -79,6 +79,33 @@ def add_picture_record(pic_type, post_id, filename):
 	finally:
 		return_connection(conn)
 
+def get_all_users_stats():
+	"""
+	Возвращает список пользователей с количеством просмотренных картинок.
+	Каждый элемент: {'user_id': id, 'viewed_count': int}
+	"""
+	conn = get_connection()
+	if not conn:
+		return []
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				SELECT id,
+					   COALESCE(array_length(viewed_anime, 1), 0) +
+					   COALESCE(array_length(viewed_real, 1), 0) as viewed_count
+				FROM users
+				ORDER BY id
+			""")
+			rows = cur.fetchall()
+			result = [{'user_id': row[0], 'viewed_count': row[1]} for row in rows]
+			return result
+	except Exception as e:
+		print(f"Error getting users stats: {e}")
+		return []
+	finally:
+		return_connection(conn)
+
+
 def get_user(user_id, referrer_id=None):
 	"""
 	Получает пользователя по id. Если не существует – создаёт.

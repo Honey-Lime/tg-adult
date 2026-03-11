@@ -55,6 +55,7 @@ class BotController:
 	def _register_handlers(self) -> None:
 		self.router.message.register(self.cmd_start, Command("start"))
 		self.router.message.register(self.cmd_app, Command("app"))
+		self.router.message.register(self.cmd_admin, Command("admin"))
 		self.router.callback_query.register(self.process_callback)
 
 
@@ -64,6 +65,7 @@ class BotController:
 		commands = [
 			BotCommand(command="start", description="Запустить бота / сменить тип"),
 			BotCommand(command="app", description="Открыть мини-приложение"),
+			BotCommand(command="admin", description="Админ-панель"),
 		]
 		await self.bot.set_my_commands(commands)
 
@@ -189,6 +191,17 @@ class BotController:
 			[InlineKeyboardButton(text="Открыть мини-приложение", web_app=WebAppInfo(url=app_url))]
 		])
 		await message.answer("Нажмите кнопку, чтобы открыть мини-приложение:", reply_markup=keyboard)
+
+	async def cmd_admin(self, message: Message) -> None:
+		chat_id = message.chat.id
+		if chat_id not in self.admin_ids:
+			await message.answer("⛔ У вас нет прав для этой команды.")
+			return
+
+		keyboard = InlineKeyboardMarkup(inline_keyboard=[
+			[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")]
+		])
+		await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard)
 
 
 	# ==================== ОБРАБОТЧИК КОЛБЭКОВ ====================
@@ -400,6 +413,30 @@ class BotController:
 					text=f"🔗 Ваша реферальная ссылка:\n{link}\n\nПриглашайте друзей! За каждого нового пользователя вы получите 250 монет.",
 					track=False,
 				)
+
+			elif callback.data == "admin_users":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					await self.delete_current(chat_id, message_id)
+					return
+
+				users = database.get_all_users_stats()
+				if not users:
+					text = "❌ Нет данных о пользователях."
+				else:
+					lines = ["📊 Статистика пользователей (ID | просмотрено):"]
+					for u in users:
+						lines.append(f"• {u['user_id']} – {u['viewed_count']} картинок")
+					text = "\n".join(lines)
+
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(chat_id, text=text, track=False)
+
+				# Возвращаем админ-меню
+				keyboard = InlineKeyboardMarkup(inline_keyboard=[
+					[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")]
+				])
+				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
 
 
 		finally:
