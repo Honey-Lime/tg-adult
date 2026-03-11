@@ -160,7 +160,7 @@ class BotController:
 		referrer_id = None
 
 		# Ручной разбор аргументов команды
-		if message.text and ' ' in message.text:
+		if message.text:
 			parts = message.text.split(maxsplit=1)
 			if len(parts) == 2 and parts[1].isdigit():
 				referrer_id = int(parts[1])
