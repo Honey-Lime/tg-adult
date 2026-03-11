@@ -167,7 +167,7 @@ class BotController:
 	async def cmd_app(self, message: Message) -> None:
 		chat_id = message.chat.id
 		# URL вашего мини-приложения (замените на реальный домен с HTTPS)
-		app_url = f"https://your-domain.com/app?user_id={chat_id}"
+		app_url = f"https://hotpicturesbot.ru/app?user_id={chat_id}"
 		keyboard = InlineKeyboardMarkup(inline_keyboard=[
 			[InlineKeyboardButton(text="Открыть мини-приложение", web_app=WebAppInfo(url=app_url))]
 		])
