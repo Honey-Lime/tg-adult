@@ -1,5 +1,6 @@
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import SecretStr
+from typing import Optional
 
 # import os
 # print("Текущая рабочая папка:", os.getcwd())
@@ -13,6 +14,8 @@ class Settings(BaseSettings):
 	db_password: SecretStr
 	db_host: str = "localhost"
 	db_port: int = 5432
+	# Список ID администраторов через запятую (например, "7413924512,5186349076")
+	admin_ids: str = ""
 
 	# Начиная со второй версии pydantic, настройки класса настроек задаются
 	# через model_config

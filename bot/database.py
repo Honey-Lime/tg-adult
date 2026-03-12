@@ -1,8 +1,19 @@
 # database.py
 import psycopg2
+import logging
 from psycopg2 import pool
+from psycopg2 import sql
 from config_reader import config
 import os
+
+from enum import Enum
+
+
+class ImageType(Enum):
+    """Типы изображений."""
+    ANIME = 0
+    REAL = 1
+
 
 # Базовая директория проекта (там, где лежит database.py)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -21,9 +32,9 @@ try:
 		port=config.db_port
 	)
 	if connection_pool:
-		print("Connection pool created successfully")
+		logging.info("Connection pool created successfully")
 except Exception as e:
-	print(f"Error creating connection pool: {e}")
+	logging.error(f"Error creating connection pool: {e}")
 	connection_pool = None
 
 def get_connection():
@@ -55,7 +66,7 @@ def add_post_record(pic_type, date):
 			conn.commit()
 			return post_id
 	except Exception as e:
-		print(f"Error adding post record {date}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -74,7 +85,7 @@ def add_picture_record(pic_type, post_id, filename):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error adding picture record {filename}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -82,12 +93,13 @@ def add_picture_record(pic_type, post_id, filename):
 
 
 def init_db():
-	"""Создаёт таблицу message_history, если её нет."""
+	"""Создаёт таблицу message_history, если её нет, и добавляет недостающие столбцы в users."""
 	conn = get_connection()
 	if not conn:
 		return
 	try:
 		with conn.cursor() as cur:
+			# Создание таблицы message_history
 			cur.execute("""
 				CREATE TABLE IF NOT EXISTS message_history (
 					id SERIAL PRIMARY KEY,
@@ -97,9 +109,17 @@ def init_db():
 				);
 				CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id);
 			""")
+			# Добавление столбцов first_name, last_name, username в таблицу users, если их нет
+			cur.execute("""
+				ALTER TABLE users
+				ADD COLUMN IF NOT EXISTS first_name TEXT,
+				ADD COLUMN IF NOT EXISTS last_name TEXT,
+				ADD COLUMN IF NOT EXISTS username TEXT;
+			""")
 			conn.commit()
+			logging.info("Database initialization completed (message_history and users columns)")
 	except Exception as e:
-		print(f"Error creating message_history table: {e}")
+		logging.error(f"Error in init_db: {e}")
 	finally:
 		return_connection(conn)
 
@@ -116,7 +136,7 @@ def add_message_record(chat_id, message_id):
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error adding message record: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -135,7 +155,7 @@ def delete_message_record(chat_id, message_id):
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error deleting message record: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -150,7 +170,7 @@ def count_messages(chat_id):
 			cur.execute("SELECT COUNT(*) FROM message_history WHERE chat_id = %s", (chat_id,))
 			return cur.fetchone()[0]
 	except Exception as e:
-		print(f"Error counting messages: {e}")
+		logging.error(f"Error : {e}")
 		return 0
 	finally:
 		return_connection(conn)
@@ -170,7 +190,7 @@ def get_oldest_message(chat_id):
 			row = cur.fetchone()
 			return row[0] if row else None
 	except Exception as e:
-		print(f"Error getting oldest message: {e}")
+		logging.error(f"Error : {e}")
 		return None
 	finally:
 		return_connection(conn)
@@ -189,7 +209,7 @@ def load_all_message_history():
 				history.setdefault(chat_id, []).append(msg_id)
 			return history
 	except Exception as e:
-		print(f"Error loading message history: {e}")
+		logging.error(f"Error : {e}")
 		return {}
 	finally:
 		return_connection(conn)
@@ -197,8 +217,16 @@ def load_all_message_history():
 
 def get_all_users_stats():
 	"""
-	Возвращает список пользователей с количеством просмотренных картинок.
-	Каждый элемент: {'user_id': id, 'viewed_count': int}
+	Возвращает список пользователей с детальной статистикой.
+	Каждый элемент: {
+		'user_id': int,
+		'first_name': str или None,
+		'last_name': str или None,
+		'username': str или None,
+		'viewed_anime_count': int,
+		'viewed_real_count': int,
+		'viewed_total': int
+	}
 	"""
 	conn = get_connection()
 	if not conn:
@@ -207,16 +235,31 @@ def get_all_users_stats():
 		with conn.cursor() as cur:
 			cur.execute("""
 				SELECT id,
+					   first_name,
+					   last_name,
+					   username,
+					   COALESCE(array_length(viewed_anime, 1), 0) as viewed_anime_count,
+					   COALESCE(array_length(viewed_real, 1), 0) as viewed_real_count,
 					   COALESCE(array_length(viewed_anime, 1), 0) +
-					   COALESCE(array_length(viewed_real, 1), 0) as viewed_count
+					   COALESCE(array_length(viewed_real, 1), 0) as viewed_total
 				FROM users
 				ORDER BY id
 			""")
 			rows = cur.fetchall()
-			result = [{'user_id': row[0], 'viewed_count': row[1]} for row in rows]
+			result = []
+			for row in rows:
+				result.append({
+					'user_id': row[0],
+					'first_name': row[1],
+					'last_name': row[2],
+					'username': row[3],
+					'viewed_anime_count': row[4],
+					'viewed_real_count': row[5],
+					'viewed_total': row[6]
+				})
 			return result
 	except Exception as e:
-		print(f"Error getting users stats: {e}")
+		logging.error(f"Error in get_all_users_stats: {e}")
 		return []
 	finally:
 		return_connection(conn)
@@ -269,7 +312,7 @@ def get_user(user_id, referrer_id=None):
 			else:
 				return None
 	except Exception as e:
-		print(f"Error getting user {user_id}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return None
 	finally:
@@ -293,7 +336,7 @@ def get_or_create_user(user_id, referrer_id=None):
 			row = cur.fetchone()
 			if row:
 				columns = [desc[0] for desc in cur.description]
-				print(f"[DEBUG] User {user_id} already exists")
+				logging.debug(f"User found in database")
 				return dict(zip(columns, row)), False
 
 			# Пользователь не найден, создаём нового
@@ -304,7 +347,7 @@ def get_or_create_user(user_id, referrer_id=None):
 				if cur.fetchone():
 					valid_referrer = True
 				else:
-					print(f"[WARNING] Referrer {referrer_id} not found, will create user without bonus")
+					logging.warning(f"Referrer {referrer_id} not found, skipping bonus")
 
 			# Вставка нового пользователя
 			if valid_referrer:
@@ -322,14 +365,14 @@ def get_or_create_user(user_id, referrer_id=None):
 
 			inserted = cur.fetchone()
 			if inserted:
-				print(f"[DEBUG] New user inserted: {user_id}")
+				logging.debug(f"New user created with id {user_id}")
 				if valid_referrer:
 					# Начисляем бонус рефереру
 					cur.execute("UPDATE users SET coins = coins + 250 WHERE id = %s", (referrer_id,))
 					if cur.rowcount == 0:
-						print(f"[ERROR] Failed to award coins to referrer {referrer_id} (should not happen)")
+						logging.error(f"Failed to add referral bonus to user {referrer_id}")
 					else:
-						print(f"[INFO] Referrer {referrer_id} awarded 250 coins for new user {user_id}")
+						logging.info(f"Referral bonus added to user {referrer_id}")
 				conn.commit()
 				# Получаем свежесозданного пользователя
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
@@ -338,11 +381,11 @@ def get_or_create_user(user_id, referrer_id=None):
 					columns = [desc[0] for desc in cur.description]
 					return dict(zip(columns, row)), True
 				else:
-					print(f"[ERROR] Could not fetch newly created user {user_id}")
+					logging.error(f"Failed to retrieve newly created user {user_id}")
 					return None, False
 			else:
 				# Конкурентная вставка – повторяем поиск
-				print(f"[DEBUG] User {user_id} was not inserted (race condition), re-fetching...")
+				logging.debug(f"Concurrent insert detected, retrying")
 				cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
 				row = cur.fetchone()
 				if row:
@@ -351,7 +394,7 @@ def get_or_create_user(user_id, referrer_id=None):
 				else:
 					return None, False
 	except Exception as e:
-		print(f"[ERROR] Error in get_or_create_user {user_id}: {e}")
+		logging.error(f"Error in get_or_create_user: {e}")
 		conn.rollback()
 		return None, False
 	finally:
@@ -372,7 +415,7 @@ def user_set_type(user_id, type):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error set type for user: {user_id}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -397,7 +440,7 @@ def user_set_cycle(user_id, cycle):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error set type for user: {user_id}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -405,7 +448,7 @@ def user_set_cycle(user_id, cycle):
 
 
 def user_watched_image(user_id, image):
-	if image['type'] == 0:
+	if image['type'] == ImageType.ANIME.value:
 		viewed_name = 'viewed_anime'
 	else:
 		viewed_name = 'viewed_real'
@@ -414,17 +457,20 @@ def user_watched_image(user_id, image):
 		return False
 	try:
 		with conn.cursor() as cur:
-			query = f"""
+			query = sql.SQL("""
 				UPDATE users
-				SET {viewed_name} = array_append(coalesce({viewed_name}, ARRAY[]::integer[]), %s),
+				SET {} = array_append(coalesce({}, ARRAY[]::integer[]), %s),
 					last_watched = %s
 				WHERE id = %s
-			"""
+			""").format(
+				sql.Identifier(viewed_name),
+				sql.Identifier(viewed_name)
+			)
 			cur.execute(query, (image['id'], image['id'], user_id))
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error updating watched for user {user_id}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -444,7 +490,7 @@ def get_images_for_moderation():
             result = [dict(zip(columns, row)) for row in rows]
             return result
     except Exception as e:
-        print(f"Error getting images for moderation: {e}")
+        logging.error(f"Error : {e}")
         return []
     finally:
         return_connection(conn)
@@ -459,7 +505,7 @@ def delete_image(image_id):
             conn.commit()
             return True
     except Exception as e:
-        print(f"Error deleting image {image_id}: {e}")
+        logging.error(f"Error : {e}")
         conn.rollback()
         return False
     finally:
@@ -476,7 +522,7 @@ def clear_moderation(image_id):
             conn.commit()
             return True
     except Exception as e:
-        print(f"Error clearing moderation for image {image_id}: {e}")
+        logging.error(f"Error : {e}")
         conn.rollback()
         return False
     finally:
@@ -489,13 +535,13 @@ def get_good_images(type):
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"SELECT * FROM pictures WHERE type = {type} and need_moderate = false ORDER BY value DESC OFFSET 25")
+			cur.execute("SELECT * FROM pictures WHERE type = %s and need_moderate = false ORDER BY value DESC OFFSET 25", (type,))
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
 			return result
 	except Exception as e:
-		print(f"Error getting all images: {e}")
+		logging.error(f"Error : {e}")
 		return []
 	finally:
 		return_connection(conn)
@@ -507,13 +553,13 @@ def get_noname_images(type):
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"SELECT * FROM pictures WHERE value > -10 and type = {type} and need_moderate = false ORDER BY total ASC")
+			cur.execute("SELECT * FROM pictures WHERE value > -10 and type = %s and need_moderate = false ORDER BY total ASC", (type,))
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
 			return result
 	except Exception as e:
-		print(f"Error getting all images: {e}")
+		logging.error(f"Error : {e}")
 		return []
 	finally:
 		return_connection(conn)
@@ -530,7 +576,7 @@ def get_not_real_type(image_id):
 			row = cur.fetchone()
 			return row[0] if row else None
 	except Exception as e:
-		print(f"Error getting not_real_type: {e}")
+		logging.error(f"Error : {e}")
 		return None
 	finally:
 		return_connection(conn)
@@ -547,7 +593,7 @@ def set_not_real_type(image_id, value):
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error setting not_real_type: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -570,19 +616,30 @@ def toggle_type(user_id):
 		return "Ошибка подключения"
 	try:
 		with conn.cursor() as cur:
-			# Меняем тип и сбрасываем not_real_type
+			# Получаем текущий тип изображения
+			cur.execute("SELECT type FROM pictures WHERE id = %s", (image_id,))
+			row = cur.fetchone()
+			if not row:
+				return "Изображение не найдено"
+			current_type = row[0]
+			# Определяем новый тип с помощью Enum
+			if current_type == ImageType.ANIME.value:
+				new_type = ImageType.REAL.value
+			else:
+				new_type = ImageType.ANIME.value
+			# Обновляем тип и сбрасываем not_real_type
 			cur.execute("""
 				UPDATE pictures
-				SET type = 1 - type,
+				SET type = %s,
 					not_real_type = false
 				WHERE id = %s
-			""", (image_id,))
+			""", (new_type, image_id))
 			conn.commit()
 			if cur.rowcount == 0:
 				return "Изображение не найдено"
 			return "Тип успешно изменён"
 	except Exception as e:
-		print(f"Error toggling type: {e}")
+		logging.error(f"Error in toggle_type: {e}")
 		conn.rollback()
 		return "Ошибка при изменении типа"
 	finally:
@@ -599,7 +656,7 @@ def set_need_moderate(image_id):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error setting need_moderate for image {image_id}: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -624,7 +681,7 @@ def add_saved_image(user_id, image_id):
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error adding saved image: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -647,20 +704,21 @@ def save(user_id, image_id):
 			if not pic:
 				return False
 			pic_type = pic[0]
-			viewed_field = 'viewed_anime' if pic_type == 0 else 'viewed_real'
+			viewed_field = 'viewed_anime' if pic_type == ImageType.ANIME.value else 'viewed_real'
 
-			cur.execute(f"""
+			query = sql.SQL("""
 				UPDATE users
 				SET saved_images = array_append(coalesce(saved_images, ARRAY[]::integer[]), %s),
 					coins = coins - 25,
-					{viewed_field} = CASE
-						WHEN NOT (%s = ANY(coalesce({viewed_field}, ARRAY[]::integer[])))
-						THEN array_append(coalesce({viewed_field}, ARRAY[]::integer[]), %s)
-						ELSE {viewed_field}
+					{viewed_column} = CASE
+						WHEN NOT (%s = ANY(coalesce({viewed_column}, ARRAY[]::integer[])))
+						THEN array_append(coalesce({viewed_column}, ARRAY[]::integer[]), %s)
+						ELSE {viewed_column}
 					END
 				WHERE id = %s AND coins >= 25
 				RETURNING coins
-			""", (image_id, image_id, image_id, user_id))
+			""").format(viewed_column=sql.Identifier(viewed_field))
+			cur.execute(query, (image_id, image_id, image_id, user_id))
 			if cur.rowcount == 0:
 				return False
 
@@ -673,7 +731,7 @@ def save(user_id, image_id):
 			conn.commit()
 			return True
 	except Exception as e:
-		print(f"Error in save: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -688,24 +746,34 @@ def like(user_id):
 	if image_id is None:
 		return False
 
-	viewed_field = 'viewed_anime' if user['type'] == 0 else 'viewed_real'
-	liked_field = 'liked_anime' if user['type'] == 0 else 'liked_real'
+	viewed_field = 'viewed_anime' if user['type'] == ImageType.ANIME.value else 'viewed_real'
+	liked_field = 'liked_anime' if user['type'] == ImageType.ANIME.value else 'liked_real'
 
 	conn = get_connection()
 	if not conn:
 		return False
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"""
+			# Обновление viewed_field
+			query_viewed = sql.SQL("""
 				UPDATE users
-				SET {viewed_field} = array_append(coalesce({viewed_field}, ARRAY[]::integer[]), %s)
+				SET {} = array_append(coalesce({}, ARRAY[]::integer[]), %s)
 				WHERE id = %s
-			""", (image_id, user_id))
-			cur.execute(f"""
+			""").format(
+				sql.Identifier(viewed_field),
+				sql.Identifier(viewed_field)
+			)
+			cur.execute(query_viewed, (image_id, user_id))
+			# Обновление liked_field
+			query_liked = sql.SQL("""
 				UPDATE users
-				SET {liked_field} = array_append(coalesce({liked_field}, ARRAY[]::integer[]), %s)
+				SET {} = array_append(coalesce({}, ARRAY[]::integer[]), %s)
 				WHERE id = %s
-			""", (image_id, user_id))
+			""").format(
+				sql.Identifier(liked_field),
+				sql.Identifier(liked_field)
+			)
+			cur.execute(query_liked, (image_id, user_id))
 			cur.execute("""
 				UPDATE pictures
 				SET likes = likes + 1, total = total + 1, value = value + 1
@@ -721,7 +789,7 @@ def like(user_id):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error liking: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -736,18 +804,22 @@ def dislike(user_id):
 	if image_id is None:
 		return False
 
-	viewed_field = 'viewed_anime' if user['type'] == 0 else 'viewed_real'
+	viewed_field = 'viewed_anime' if user['type'] == ImageType.ANIME.value else 'viewed_real'
 
 	conn = get_connection()
 	if not conn:
 		return False
 	try:
 		with conn.cursor() as cur:
-			cur.execute(f"""
+			query_viewed = sql.SQL("""
 				UPDATE users
-				SET {viewed_field} = array_append(coalesce({viewed_field}, ARRAY[]::integer[]), %s)
+				SET {} = array_append(coalesce({}, ARRAY[]::integer[]), %s)
 				WHERE id = %s
-			""", (image_id, user_id))
+			""").format(
+				sql.Identifier(viewed_field),
+				sql.Identifier(viewed_field)
+			)
+			cur.execute(query_viewed, (image_id, user_id))
 			cur.execute("""
 				UPDATE pictures
 				SET dislikes = dislikes + 1, total = total + 1, value = value - 1
@@ -763,7 +835,7 @@ def dislike(user_id):
 			conn.commit()
 		return True
 	except Exception as e:
-		print(f"Error disliking: {e}")
+		logging.error(f"Error : {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -777,20 +849,65 @@ def add_coins(user_id, amount):
 	"""
 	conn = get_connection()
 	if not conn:
-		print(f"[ERROR] add_coins: no connection")
+		logging.error(f"No connection available in add_coins for user {user_id}")
 		return False
 	try:
 		with conn.cursor() as cur:
 			cur.execute("UPDATE users SET coins = coins + %s WHERE id = %s", (amount, user_id))
 			if cur.rowcount == 0:
-				print(f"[ERROR] add_coins: user {user_id} not found")
+				logging.error(f"User {user_id} not found, cannot add coins")
 				conn.rollback()
 				return False
 			conn.commit()
-			print(f"[DEBUG] add_coins: added {amount} to user {user_id}")
+			logging.debug(f"Added {amount} coins to user {user_id}")
 			return True
 	except Exception as e:
-		print(f"[ERROR] add_coins: {e}")
+		logging.error(f"Error adding coins to user {user_id}: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
+def update_user_profile(user_id, first_name=None, last_name=None, username=None):
+	"""
+	Обновляет профиль пользователя (имя, фамилия, юзернейм) в базе данных.
+	Если поля не переданы, оставляет существующие значения.
+	Возвращает True при успехе, False при ошибке.
+	"""
+	conn = get_connection()
+	if not conn:
+		logging.error(f"No connection available in update_user_profile for user {user_id}")
+		return False
+	try:
+		with conn.cursor() as cur:
+			# Строим динамический запрос на основе переданных данных
+			updates = []
+			params = []
+			if first_name is not None:
+				updates.append("first_name = %s")
+				params.append(first_name)
+			if last_name is not None:
+				updates.append("last_name = %s")
+				params.append(last_name)
+			if username is not None:
+				updates.append("username = %s")
+				params.append(username)
+			if not updates:
+				# Нет полей для обновления
+				return True
+			params.append(user_id)
+			query = f"UPDATE users SET {', '.join(updates)} WHERE id = %s"
+			cur.execute(query, params)
+			if cur.rowcount == 0:
+				logging.warning(f"User {user_id} not found, cannot update profile")
+				conn.rollback()
+				return False
+			conn.commit()
+			logging.debug(f"Updated profile for user {user_id}")
+			return True
+	except Exception as e:
+		logging.error(f"Error updating profile for user {user_id}: {e}")
 		conn.rollback()
 		return False
 	finally:
@@ -798,43 +915,88 @@ def add_coins(user_id, amount):
 
 
 def get_image(user_id):
-	user = get_user(user_id)
-	if not user:
-		return None, None
+    """
+    Возвращает (путь_к_файлу, данные_изображения) для пользователя.
+    Оптимизированная версия: использует одно соединение, объединяет запросы.
+    """
+    conn = get_connection()
+    if not conn:
+        logging.error(f"No connection available for user {user_id}")
+        return None, None
 
-	if user['type'] == 0:
-		exclude = set(user['viewed_anime'])
-		base_path = IMAGE_DIR_ANIME
-	else:
-		exclude = set(user['viewed_real'])
-		base_path = IMAGE_DIR_REAL
+    try:
+        with conn.cursor() as cur:
+            # Получаем пользователя
+            cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            if not row:
+                logging.warning(f"User {user_id} not found")
+                return None, None
+            columns = [desc[0] for desc in cur.description]
+            user = dict(zip(columns, row))
 
-	if user['cycle'] == 0:
-		database_images = get_good_images(user['type'])
-	else:
-		database_images = get_noname_images(user['type'])
+            # Определяем параметры
+            user_type = user['type']
+            cycle = user['cycle']
+            viewed_array = user['viewed_anime'] if user_type == ImageType.ANIME.value else user['viewed_real']
+            base_path = IMAGE_DIR_ANIME if user_type == ImageType.ANIME.value else IMAGE_DIR_REAL
 
-	for img in database_images:
-		if img['id'] not in exclude:
-			full_path = os.path.join(base_path, img['path'])
-			if os.path.isfile(full_path):
-				# Обновляем last_watched
-				conn = get_connection()
-				if conn:
-					try:
-						with conn.cursor() as cur:
-							cur.execute("UPDATE users SET last_watched = %s WHERE id = %s", (img['id'], user_id))
-							conn.commit()
-					except Exception as e:
-						print(f"Error updating last_watched: {e}")
-						conn.rollback()
-					finally:
-						return_connection(conn)
-				user_set_cycle(user_id, user['cycle'])
+            # Строим запрос в зависимости от цикла
+            if cycle == 0:
+                # good images: value DESC, OFFSET 25
+                query = """
+                    SELECT * FROM pictures
+                    WHERE type = %s
+                      AND need_moderate = false
+                      AND id != ALL(%s)
+                    ORDER BY value DESC
+                    OFFSET 25
+                    LIMIT 50
+                """
+            else:
+                # noname images: value > -10, total ASC
+                query = """
+                    SELECT * FROM pictures
+                    WHERE type = %s
+                      AND need_moderate = false
+                      AND value > -10
+                      AND id != ALL(%s)
+                    ORDER BY total ASC
+                    LIMIT 50
+                """
+            cur.execute(query, (user_type, viewed_array))
+            candidates = cur.fetchall()
+            if not candidates:
+                logging.warning(f"No candidate images for user {user_id}")
+                return None, None
 
-				# Логируем выдачу картинки
-				# print(f"[IMAGE] выдана: id={img['id']}, likes={img['likes']}, dislikes={img['dislikes']}, total={img['total']}, value={img['value']}")
-				return full_path, img
-
-	print(f"User {user_id} has no available images with existing files")
-	return None, None
+            # Преобразуем в словари
+            cand_columns = [desc[0] for desc in cur.description]
+            for cand in candidates:
+                img = dict(zip(cand_columns, cand))
+                full_path = os.path.join(base_path, img['path'])
+                if os.path.isfile(full_path):
+                    # Нашли подходящее изображение
+                    # Обновляем last_watched и cycle в одной транзакции
+                    new_cycle = 1 if cycle == 0 else 0
+                    cur.execute("""
+                        UPDATE users
+                        SET last_watched = %s, cycle = %s
+                        WHERE id = %s
+                    """, (img['id'], new_cycle, user_id))
+                    conn.commit()
+                    # Логируем выдачу
+                    logging.debug(
+                        f"Image delivered: id={img['id']}, likes={img['likes']}, "
+                        f"dislikes={img['dislikes']}, total={img['total']}, value={img['value']}"
+                    )
+                    return full_path, img
+            # Ни один файл не существует
+            logging.warning(f"User {user_id} has no available images with existing files")
+            return None, None
+    except Exception as e:
+        logging.error(f"Error in get_image for user {user_id}: {e}")
+        conn.rollback()
+        return None, None
+    finally:
+        return_connection(conn)

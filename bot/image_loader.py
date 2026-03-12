@@ -50,7 +50,7 @@ def merge_dicts(dict_list):
 def load_to_database(data):
 	"""грузит массив изображений в базу данных"""
 	for d in data:
-		type = 0 if d == 'anime' else 1
+		type = database.ImageType.ANIME.value if d == 'anime' else database.ImageType.REAL.value
 		print(d)
 		for date in data[d]:
 			print(date)

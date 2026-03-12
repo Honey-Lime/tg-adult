@@ -5,6 +5,7 @@ Telegram Bot для оценки и сохранения изображений 
 """
 
 import logging
+import sys
 import asyncio
 from typing import Dict, Optional, List
 import os
@@ -23,8 +24,16 @@ from aiogram.types import (
 
 from config_reader import config
 import database
+import keyboards
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler("bot.log", encoding="utf-8")
+    ]
+)
 
 
 class BotController:
@@ -135,13 +144,37 @@ class BotController:
 		for chat_id, msg_ids in db_history.items():
 			# Оставляем только последние 10 (на случай, если в БД больше)
 			self.message_history[chat_id] = msg_ids[-10:]
-		print(f"[INFO] Loaded message history for {len(self.message_history)} chats")
+		logging.info(f"Loaded message history for {len(self.message_history)} chats")
 
+	async def _update_user_profile_from_message(self, message: Message) -> None:
+		"""
+		Обновляет профиль пользователя на основе данных из сообщения Telegram.
+		Вызывается при каждом сообщении или колбэке, где есть информация о пользователе.
+		"""
+		user = message.from_user
+		if not user:
+			return
+		chat_id = message.chat.id
+		first_name = user.first_name
+		last_name = user.last_name
+		username = user.username
+		database.update_user_profile(chat_id, first_name, last_name, username)
+
+	async def _update_user_profile_from_callback(self, callback: CallbackQuery) -> None:
+		"""
+		Обновляет профиль пользователя на основе данных из колбэка Telegram.
+		"""
+		user = callback.from_user
+		if not user:
+			return
+		chat_id = user.id
+		first_name = user.first_name
+		last_name = user.last_name
+		username = user.username
+		database.update_user_profile(chat_id, first_name, last_name, username)
 
 	async def edit_message_to_save_button(self, chat_id: int, message_id: int, image_id: int) -> None:
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="Сохранить 25🪙", callback_data=f"save_{image_id}")]
-		])
+		keyboard = keyboards.get_save_button_keyboard(image_id)
 		try:
 			await self.bot.edit_message_reply_markup(
 				chat_id=chat_id,
@@ -149,9 +182,9 @@ class BotController:
 				reply_markup=keyboard,
 				business_connection_id=None,
 			)
-			print(f"[OK] Сообщение {message_id} отредактировано, добавлена кнопка save_{image_id}")
+			logging.info(f"Сообщение {message_id} отредактировано, добавлена кнопка save_{image_id}")
 		except Exception as e:
-			print(f"[ОШИБКА] Не удалось отредактировать сообщение {message_id}: {type(e).__name__}: {e}")
+			logging.error(f"Не удалось отредактировать сообщение {message_id}: {type(e).__name__}: {e}")
 
 
 	async def delete_current(self, chat_id: int, message_id: int) -> None:
@@ -161,7 +194,7 @@ class BotController:
 			if chat_id in self.last_image_message_id and self.last_image_message_id[chat_id] == message_id:
 				del self.last_image_message_id[chat_id]
 		except Exception as e:
-			print(f"Не удалось удалить сообщение {message_id}: {e}")
+			logging.error(f"Не удалось удалить сообщение {message_id}: {e}")
 
 
 	async def remove_keyboard(self, chat_id: int, message_id: int) -> None:
@@ -174,12 +207,14 @@ class BotController:
 				business_connection_id=None
 			)
 		except Exception as e:
-			print(f"Не удалось убрать клавиатуру с сообщения {message_id}: {e}")
+			logging.error(f"Не удалось убрать клавиатуру с сообщения {message_id}: {e}")
 
 
 	# ==================== ОБРАБОТЧИКИ КОМАНД ====================
 
 	async def cmd_start(self, message: Message) -> None:
+		# Обновляем профиль пользователя
+		await self._update_user_profile_from_message(message)
 		chat_id = message.chat.id
 		referrer_id = None
 
@@ -219,7 +254,7 @@ class BotController:
 				await self.bot.delete_message(chat_id, self.last_image_message_id[chat_id])
 				self.remove_from_history(chat_id, self.last_image_message_id[chat_id])
 			except Exception as e:
-				print(f"Не удалось удалить последнюю картинку: {e}")
+				logging.error(f"Не удалось удалить последнюю картинку: {e}")
 			finally:
 				del self.last_image_message_id[chat_id]
 
@@ -227,24 +262,21 @@ class BotController:
 
 
 	async def cmd_app(self, message: Message) -> None:
+		# Обновляем профиль пользователя
+		await self._update_user_profile_from_message(message)
 		chat_id = message.chat.id
-		# URL вашего мини-приложения (замените на реальный домен с HTTPS)
-		app_url = f"https://hotpicturesbot.ru/app?user_id={chat_id}"
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="Открыть мини-приложение", web_app=WebAppInfo(url=app_url))]
-		])
+		keyboard = keyboards.get_web_app_keyboard(chat_id)
 		await message.answer("Нажмите кнопку, чтобы открыть мини-приложение:", reply_markup=keyboard)
 
 	async def cmd_admin(self, message: Message) -> None:
+		# Обновляем профиль пользователя
+		await self._update_user_profile_from_message(message)
 		chat_id = message.chat.id
 		if chat_id not in self.admin_ids:
 			await message.answer("⛔ У вас нет прав для этой команды.")
 			return
 
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
-			[InlineKeyboardButton(text="🛡 Модерация", callback_data="admin_moderation")]
-		])
+		keyboard = keyboards.get_admin_panel_keyboard()
 		await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard)
 
 	async def show_moderation_image(self, chat_id: int, current_message_id: int = None):
@@ -276,7 +308,7 @@ class BotController:
 		image = self.moderation_queues[chat_id][0]
 		remaining = len(self.moderation_queues[chat_id]) - 1
 
-		base_path = database.IMAGE_DIR_ANIME if image['type'] == 0 else database.IMAGE_DIR_REAL
+		base_path = database.IMAGE_DIR_ANIME if image['type'] == database.ImageType.ANIME.value else database.IMAGE_DIR_REAL
 		full_path = os.path.join(base_path, image['path'])
 
 		if not os.path.isfile(full_path):
@@ -286,10 +318,7 @@ class BotController:
 			return
 
 		caption = f"🛡 Модерация: {image['id']}\nОсталось: {remaining}"
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="❌ Удалить", callback_data=f"mod_delete_{image['id']}"),
-			 InlineKeyboardButton(text="✅ Восстановить", callback_data=f"mod_restore_{image['id']}")]
-		])
+		keyboard = keyboards.get_moderation_keyboard(image['id'])
 		image_file = FSInputFile(full_path)
 		sent = await self.send_and_track(chat_id, photo=image_file, text=caption, reply_markup=keyboard)
 		self.last_moderation_message_id[chat_id] = sent.message_id
@@ -306,6 +335,8 @@ class BotController:
 		self.user_processing[chat_id] = True
 
 		try:
+			# Обновляем профиль пользователя
+			await self._update_user_profile_from_callback(callback)
 			await callback.answer()
 
 			if callback.data in ["anime", "real"]:
@@ -314,11 +345,11 @@ class BotController:
 
 			# --- Выбор типа контента ---
 			if callback.data == "anime":
-				database.user_set_type(chat_id, 0)
+				database.user_set_type(chat_id, database.ImageType.ANIME.value)
 				await self.send_picture(chat_id)
 
 			elif callback.data == "real":
-				database.user_set_type(chat_id, 1)
+				database.user_set_type(chat_id, database.ImageType.REAL.value)
 				await self.send_picture(chat_id)
 
 
@@ -455,11 +486,7 @@ class BotController:
 			# --- Жалоба (открывает меню выбора причины) ---
 			elif callback.data == "report":
 				await self.delete_current(chat_id, message_id)
-				keyboard = InlineKeyboardMarkup(inline_keyboard=[
-					[InlineKeyboardButton(text="У изображения не тот тип", callback_data="report_wrong_type")],
-					[InlineKeyboardButton(text="Контент неприемлем", callback_data="report_inappropriate")],
-					[InlineKeyboardButton(text="Отмена", callback_data="report_cancel")]
-				])
+				keyboard = keyboards.get_report_reasons_keyboard()
 				await self.send_and_track(
 					chat_id,
 					text="Выберите причину жалобы:",
@@ -541,18 +568,27 @@ class BotController:
 				if not users:
 					text = "❌ Нет данных о пользователях."
 				else:
-					lines = ["📊 Статистика пользователей (ID | просмотрено):"]
+					lines = ["📊 Статистика пользователей (ID | имя | просмотры):"]
 					for u in users:
-						lines.append(f"• {u['user_id']} – {u['viewed_count']} картинок")
+						# Формируем отображаемое имя
+						name_parts = []
+						if u['first_name']:
+							name_parts.append(u['first_name'])
+						if u['last_name']:
+							name_parts.append(u['last_name'])
+						display_name = ' '.join(name_parts) if name_parts else '—'
+						username = f"@{u['username']}" if u['username'] else '—'
+						lines.append(
+							f"• {u['user_id']} | {display_name} ({username}) | "
+							f"Всего: {u['viewed_total']} (аниме: {u['viewed_anime_count']}, фото: {u['viewed_real_count']})"
+						)
 					text = "\n".join(lines)
 
 				await self.delete_current(chat_id, message_id)
 				await self.send_and_track(chat_id, text=text, track=False)
 
 				# Возвращаем админ-меню
-				keyboard = InlineKeyboardMarkup(inline_keyboard=[
-					[InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")]
-				])
+				keyboard = keyboards.get_admin_users_keyboard()
 				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
 
 
@@ -563,11 +599,7 @@ class BotController:
 	# ==================== МЕТОДЫ ОТПРАВКИ СООБЩЕНИЙ ====================
 
 	async def send_menu(self, chat_id: int) -> None:
-		keyboard = InlineKeyboardMarkup(inline_keyboard=[
-			[InlineKeyboardButton(text="Anime", callback_data="anime"),
-			 InlineKeyboardButton(text="Real", callback_data="real")],
-			[InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="referral")]
-		])
+		keyboard = keyboards.get_main_menu_keyboard()
 		await self.send_and_track(chat_id, text="Выбери стиль картинок или получи реферальную ссылку:",
 								  reply_markup=keyboard)
 
@@ -603,18 +635,10 @@ class BotController:
 			user = database.get_user(chat_id)
 			coins = user.get('coins', 0) if user else 0
 
-			current_type = "Аниме" if image_data['type'] == 0 else "Фото"
+			current_type = "Аниме" if image_data['type'] == database.ImageType.ANIME.value else "Фото"
 			caption_text = f"{current_type} | {coins}🪙"
 
-			buttons = [
-				InlineKeyboardButton(text="😐", callback_data="dislike"),
-				InlineKeyboardButton(text="❤️", callback_data="like"),
-				InlineKeyboardButton(text="⚠️ Не тот тип\Жалоба", callback_data="report"),
-				# InlineKeyboardButton(text="Menu", callback_data="menu"),
-				InlineKeyboardButton(text="Сохранить 25🪙", callback_data="save")
-			]
-			keyboard_rows = [buttons[:2], buttons[2:]]
-			keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
+			keyboard = keyboards.get_picture_keyboard()
 
 			image = FSInputFile(image_path)
 			sent = await self.send_and_track(
@@ -655,9 +679,22 @@ class BotController:
 
 
 def main() -> None:
+	# Получаем ID администраторов из конфига
+	admin_ids_str = config.admin_ids.strip()
+	if admin_ids_str:
+		try:
+			admin_ids = [int(id_str.strip()) for id_str in admin_ids_str.split(',')]
+		except ValueError:
+			logging.warning("Неверный формат ADMIN_IDS в конфиге, используется fallback")
+			admin_ids = [7413924512, 5186349076]
+	else:
+		# Если строка пустая, используем fallback (старые ID)
+		admin_ids = [7413924512, 5186349076]
+		logging.info("ADMIN_IDS не заданы, используется fallback")
+
 	controller = BotController(
 		token=config.bot_token.get_secret_value(),
-		admin_ids=[7413924512, 5186349076],
+		admin_ids=admin_ids,
 	)
 	asyncio.run(controller.start_polling())
 

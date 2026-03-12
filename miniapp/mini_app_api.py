@@ -4,6 +4,8 @@ from fastapi.staticfiles import StaticFiles
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
+import time
+from functools import lru_cache
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -27,7 +29,29 @@ def get_db_connection():
 		cursor_factory=RealDictCursor
 	)
 
+# Простой кэш с TTL
+_cache = {}
+_CACHE_TTL = 30  # секунды
+
+def cached_with_ttl(ttl):
+    """Декоратор для кэширования результата функции с TTL."""
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            key = (func.__name__, args, tuple(kwargs.items()))
+            now = time.time()
+            if key in _cache:
+                value, timestamp = _cache[key]
+                if now - timestamp < ttl:
+                    return value
+            # Выполняем функцию
+            result = await func(*args, **kwargs)
+            _cache[key] = (result, now)
+            return result
+        return wrapper
+    return decorator
+
 @app.get("/api/top")
+@cached_with_ttl(ttl=30)
 async def get_top(type: int):
     """
     Возвращает топ-25 изображений указанного типа (0 - аниме, 1 - реальные).
@@ -50,6 +74,7 @@ async def get_top(type: int):
         conn.close()
 
 @app.get("/api/saved")
+@cached_with_ttl(ttl=10)
 async def get_saved(user_id: int):
 	conn = get_db_connection()
 	try:
