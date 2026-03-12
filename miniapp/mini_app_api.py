@@ -1,6 +1,8 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
+from fastapi.exceptions import RequestValidationError
+import logging
 import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
@@ -11,6 +13,19 @@ from dotenv import load_dotenv
 load_dotenv()
 
 app = FastAPI()
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Обработчик ошибок валидации
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(f"Validation error for request {request.url}: {exc.errors()}")
+    return JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
 
 # Раздача статических файлов (фронтенд)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -56,9 +71,7 @@ async def get_top(image_type: int = Query(..., alias="type")):
     """
     Возвращает топ-25 изображений указанного типа (0 - аниме, 1 - реальные).
     """
-    import logging
-    logging.basicConfig(level=logging.INFO)
-    logging.info(f"get_top called with type={image_type}")
+    logger.info(f"get_top called with type={image_type}")
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
@@ -70,10 +83,10 @@ async def get_top(image_type: int = Query(..., alias="type")):
                 LIMIT 25
             """, (image_type,))
             images = cur.fetchall()
-            logging.info(f"Found {len(images)} images")
+            logger.info(f"Found {len(images)} images")
             return images
     except Exception as e:
-        logging.error(f"Error in get_top: {e}")
+        logger.error(f"Error in get_top: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()
@@ -81,9 +94,7 @@ async def get_top(image_type: int = Query(..., alias="type")):
 @app.get("/api/saved")
 @cached_with_ttl(ttl=10)
 async def get_saved(user_id: int):
-	import logging
-	logging.basicConfig(level=logging.INFO)
-	logging.info(f"get_saved called with user_id={user_id}")
+	logger.info(f"get_saved called with user_id={user_id}")
 	conn = get_db_connection()
 	try:
 		with conn.cursor() as cur:
@@ -91,7 +102,7 @@ async def get_saved(user_id: int):
 			cur.execute("SELECT saved_images FROM users WHERE id = %s", (user_id,))
 			row = cur.fetchone()
 			if not row or not row['saved_images']:
-				logging.info("No saved images")
+				logger.info("No saved images")
 				return []
 			saved_ids = row['saved_images']
 			# Запрашиваем картинки и сортируем по value
@@ -102,10 +113,10 @@ async def get_saved(user_id: int):
 				ORDER BY value DESC
 			""", (saved_ids,))
 			images = cur.fetchall()
-			logging.info(f"Found {len(images)} saved images")
+			logger.info(f"Found {len(images)} saved images")
 			return images
 	except Exception as e:
-		logging.error(f"Error in get_saved: {e}")
+		logger.error(f"Error in get_saved: {e}")
 		raise HTTPException(status_code=500, detail=str(e))
 	finally:
 		conn.close()
