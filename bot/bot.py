@@ -838,7 +838,7 @@ class BotController:
 
 	async def send_menu(self, chat_id: int) -> None:
 		keyboard = keyboards.get_main_menu_keyboard()
-		await self.send_and_track(chat_id, text="👋Здесь вы можете выбрать картинки(Аниме, Фото) или видео. \n👉В miniapp (/app) вы можете увидеть свои сохраненные картинки и ТОП25.",
+		await self.send_and_track(chat_id, text="👋Здесь вы можете выбрать картинки(Аниме, Фото) или видео. \n\n👉В miniapp (/app) вы можете увидеть свои сохраненные картинки и ТОП25.",
 								  reply_markup=keyboard)
 
 
