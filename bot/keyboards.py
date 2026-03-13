@@ -12,8 +12,8 @@ def get_main_menu_keyboard() -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🖼Аниме", callback_data="anime"),
-         InlineKeyboardButton(text="🖼Фото", callback_data="real"),
-         InlineKeyboardButton(text="🎞Видео", callback_data="video")],
+         InlineKeyboardButton(text="🖼Фото", callback_data="real")],
+        [InlineKeyboardButton(text="🎞Видео", callback_data="video")],
         [InlineKeyboardButton(text="🔗 Реферальная ссылка", callback_data="referral")]
     ])
 
@@ -23,8 +23,8 @@ def get_video_menu_keyboard() -> InlineKeyboardMarkup:
     Клавиатура выбора видео (цена указана в названии).
     """
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="ТОП25 🪙400", callback_data="video_top25")],
-        [InlineKeyboardButton(text="Хорошее 🪙150", callback_data="video_good")],
+        [InlineKeyboardButton(text="ТОП25 🪙500", callback_data="video_top25")],
+        [InlineKeyboardButton(text="Хорошее 🪙200", callback_data="video_good")],
         [InlineKeyboardButton(text="Без оценки", callback_data="video_free")]
     ])
 

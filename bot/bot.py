@@ -80,8 +80,8 @@ class BotController:
 
 	async def set_bot_commands(self) -> None:
 		commands = [
-			BotCommand(command="start", description="Запустить бота / сменить тип"),
-			BotCommand(command="app", description="Открыть мини-приложение"),
+			BotCommand(command="start", description="Старт / Главное меню"),
+			BotCommand(command="app", description="Мини приложение(ТОП, Сохраненные)"),
 			BotCommand(command="admin", description="Админ-панель"),
 		]
 		await self.bot.set_my_commands(commands)
@@ -384,10 +384,12 @@ class BotController:
 
 			elif callback.data == "video":
 				await self.delete_current(chat_id, message_id)
+				user = database.get_user(chat_id)
+				coins = user.get('coins', 0) if user else 0
 				keyboard = keyboards.get_video_menu_keyboard()
 				await self.send_and_track(
 					chat_id,
-					text="Выберите видео:",
+					text=f"Баланс: {coins}🪙\nВыберите видео:",
 					reply_markup=keyboard,
 				)
 
@@ -605,10 +607,12 @@ class BotController:
 					track=False,
 				)
 				# Возвращаем меню выбора видео
+				user = database.get_user(chat_id)
+				coins = user.get('coins', 0) if user else 0
 				keyboard = keyboards.get_video_menu_keyboard()
 				await self.send_and_track(
 					chat_id,
-					text="Выберите видео:",
+					text=f"Баланс: {coins}🪙\nВыберите видео:",
 					reply_markup=keyboard,
 				)
 
@@ -619,10 +623,12 @@ class BotController:
 					text="Хорошее",
 					track=False,
 				)
+				user = database.get_user(chat_id)
+				coins = user.get('coins', 0) if user else 0
 				keyboard = keyboards.get_video_menu_keyboard()
 				await self.send_and_track(
 					chat_id,
-					text="Выберите видео:",
+					text=f"Баланс: {coins}🪙\nВыберите видео:",
 					reply_markup=keyboard,
 				)
 
@@ -633,10 +639,12 @@ class BotController:
 					text="Бесплатно",
 					track=False,
 				)
+				user = database.get_user(chat_id)
+				coins = user.get('coins', 0) if user else 0
 				keyboard = keyboards.get_video_menu_keyboard()
 				await self.send_and_track(
 					chat_id,
-					text="Выберите видео:",
+					text=f"Баланс: {coins}🪙\nВыберите видео:",
 					reply_markup=keyboard,
 				)
 
