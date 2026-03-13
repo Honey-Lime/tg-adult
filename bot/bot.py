@@ -58,6 +58,10 @@ class BotController:
 		self.last_picture_time: Dict[int, float] = {}			# chat_id -> время последней отправки картинки (для rate limit)
 		self.sending_picture: Dict[int, bool] = {}			   # chat_id -> флаг, выполняется ли сейчас отправка картинки
 
+		# Состояние ожидания пользовательского сообщения для рассылки
+		self.waiting_for_custom_message: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода сообщения)
+		self.pending_custom_message: Dict[int, str] = {}	   # chat_id -> текст сообщения для рассылки
+
 		self._register_handlers()
 		# Инициализация БД для истории сообщений
 		database.init_db()
@@ -68,6 +72,7 @@ class BotController:
 		self.router.message.register(self.cmd_start, Command("start"))
 		self.router.message.register(self.cmd_app, Command("app"))
 		self.router.message.register(self.cmd_admin, Command("admin"))
+		self.router.message.register(self.handle_message)
 		self.router.callback_query.register(self.process_callback)
 
 
@@ -275,6 +280,35 @@ class BotController:
 		keyboard = keyboards.get_admin_panel_keyboard()
 		await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard)
 
+	async def handle_message(self, message: Message) -> None:
+		"""
+		Обработчик текстовых сообщений (не команд).
+		Используется для захвата пользовательского сообщения для рассылки.
+		"""
+		chat_id = message.chat.id
+		# Обновляем профиль пользователя
+		await self._update_user_profile_from_message(message)
+
+		if chat_id in self.waiting_for_custom_message and self.waiting_for_custom_message[chat_id]:
+			if not message.text:
+				await message.answer("Пожалуйста, отправьте текстовое сообщение.")
+				return
+			# Сохраняем текст и предлагаем подтверждение
+			self.pending_custom_message[chat_id] = message.text
+			self.waiting_for_custom_message[chat_id] = False
+			keyboard = keyboards.get_notification_confirm_keyboard("custom")
+			await self.send_and_track(
+				chat_id,
+				text=f"📢 Отправить оповещение:\n\n{message.text}",
+				reply_markup=keyboard,
+				track=False
+			)
+			# Удаляем сообщение пользователя (опционально)
+			try:
+				await message.delete()
+			except:
+				pass
+
 	async def show_moderation_image(self, chat_id: int, current_message_id: int = None):
 		if current_message_id:
 			await self.delete_current(chat_id, current_message_id)
@@ -347,6 +381,15 @@ class BotController:
 			elif callback.data == "real":
 				database.user_set_type(chat_id, database.ImageType.REAL.value)
 				await self.send_picture(chat_id)
+
+			elif callback.data == "video":
+				await self.delete_current(chat_id, message_id)
+				keyboard = keyboards.get_video_menu_keyboard()
+				await self.send_and_track(
+					chat_id,
+					text="Выберите видео:",
+					reply_markup=keyboard,
+				)
 
 
 			# --- Меню ---
@@ -554,6 +597,49 @@ class BotController:
 					track=False,
 				)
 
+			elif callback.data == "video_top25":
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(
+					chat_id,
+					text="ТОП25",
+					track=False,
+				)
+				# Возвращаем меню выбора видео
+				keyboard = keyboards.get_video_menu_keyboard()
+				await self.send_and_track(
+					chat_id,
+					text="Выберите видео:",
+					reply_markup=keyboard,
+				)
+
+			elif callback.data == "video_good":
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(
+					chat_id,
+					text="Хорошее",
+					track=False,
+				)
+				keyboard = keyboards.get_video_menu_keyboard()
+				await self.send_and_track(
+					chat_id,
+					text="Выберите видео:",
+					reply_markup=keyboard,
+				)
+
+			elif callback.data == "video_free":
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(
+					chat_id,
+					text="Бесплатно",
+					track=False,
+				)
+				keyboard = keyboards.get_video_menu_keyboard()
+				await self.send_and_track(
+					chat_id,
+					text="Выберите видео:",
+					reply_markup=keyboard,
+				)
+
 			elif callback.data == "admin_users":
 				if chat_id not in self.admin_ids:
 					await callback.answer("⛔ Доступ запрещён")
@@ -635,6 +721,16 @@ class BotController:
 				keyboard = keyboards.get_notification_confirm_keyboard("restored")
 				await self.send_and_track(chat_id, text=f"📢 Отправить оповещение:\n\n{message_text}", reply_markup=keyboard, track=False)
 
+			elif callback.data == "notification_custom":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(chat_id, text="Следующее сообщение будет отправлено всем пользователям. Напишите текст сообщения:", track=False)
+				self.waiting_for_custom_message[chat_id] = True
+				self.pending_custom_message[chat_id] = ""
+
 			elif callback.data == "notification_confirm_restored":
 				if chat_id not in self.admin_ids:
 					await callback.answer("⛔ Доступ запрещён")
@@ -672,6 +768,52 @@ class BotController:
 				keyboard = keyboards.get_admin_panel_keyboard()
 				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
 
+			elif callback.data == "notification_confirm_custom":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(chat_id, text="📢 Рассылка сообщения всем пользователям...", track=False)
+
+				user_ids = database.get_all_user_ids()
+				if not user_ids:
+					await self.send_and_track(chat_id, text="❌ Нет пользователей для рассылки.", track=False)
+					# Возвращаем админ-меню
+					keyboard = keyboards.get_admin_panel_keyboard()
+					await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+					return
+
+				message_text = self.pending_custom_message.get(chat_id)
+				if not message_text:
+					await self.send_and_track(chat_id, text="❌ Не найден текст сообщения. Начните заново.", track=False)
+					keyboard = keyboards.get_admin_panel_keyboard()
+					await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+					return
+
+				success_count = 0
+				fail_count = 0
+
+				for user_id in user_ids:
+					try:
+						await self.bot.send_message(user_id, message_text)
+						success_count += 1
+						# небольшая задержка, чтобы не превысить лимиты Telegram
+						await asyncio.sleep(0.05)
+					except Exception as e:
+						logging.warning(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
+						fail_count += 1
+
+				report = f"✅ Рассылка завершена.\nУспешно: {success_count}\nНе удалось: {fail_count}"
+				await self.send_and_track(chat_id, text=report, track=False)
+
+				# Очищаем сохранённое сообщение
+				self.pending_custom_message.pop(chat_id, None)
+
+				# Возвращаем админ-меню
+				keyboard = keyboards.get_admin_panel_keyboard()
+				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+
 			elif callback.data == "notification_cancel":
 				if chat_id not in self.admin_ids:
 					await callback.answer("⛔ Доступ запрещён")
@@ -688,7 +830,7 @@ class BotController:
 
 	async def send_menu(self, chat_id: int) -> None:
 		keyboard = keyboards.get_main_menu_keyboard()
-		await self.send_and_track(chat_id, text="👋Здесь вы можете выбрать картинки(Аниме, Фото) или видео. \n👉В miniapp (/app) вы можете увидеть свои сохраненные картинки и ТОП25 картинок.",
+		await self.send_and_track(chat_id, text="👋Здесь вы можете выбрать картинки(Аниме, Фото) или видео. \n👉В miniapp (/app) вы можете увидеть свои сохраненные картинки и ТОП25.",
 								  reply_markup=keyboard)
 
 
