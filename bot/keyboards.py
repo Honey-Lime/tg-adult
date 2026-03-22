@@ -60,7 +60,9 @@ def get_admin_panel_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")],
         [InlineKeyboardButton(text="🛡 Модерация", callback_data="admin_moderation")],
         [InlineKeyboardButton(text="📢 Оповещения", callback_data="admin_notifications")],
-        [InlineKeyboardButton(text="📥 Загрузить изображения", callback_data="admin_load_images")]
+        [InlineKeyboardButton(text="📥 Загрузка контента", callback_data="admin_load_images")],
+        [InlineKeyboardButton(text="🧹 Чистка по json", callback_data="admin_cleanup_json")],
+        [InlineKeyboardButton(text="📋 Логи", callback_data="admin_logs")]
     ])
 
 

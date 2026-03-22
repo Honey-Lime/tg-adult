@@ -123,6 +123,81 @@ def update_picture_path(picture_id, new_filename):
 		return_connection(conn)
 
 
+def add_video_record(post_id, path):
+	"""
+	Добавляет запись о видео в таблицу videos.
+	Возвращает ID видео при успехе, иначе False.
+	"""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				INSERT INTO videos (post_id, path)
+				VALUES (%s, %s)
+				RETURNING id
+			""", (post_id, path))
+			video_id = cur.fetchone()[0]
+			conn.commit()
+			return video_id
+	except Exception as e:
+		logging.error(f"Error adding video record: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
+def update_post_have_video(post_id):
+	"""
+	Устанавливает have_video = TRUE для указанного поста.
+	Возвращает True при успехе, False при ошибке.
+	"""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				UPDATE posts
+				SET have_video = TRUE
+				WHERE id = %s
+			""", (post_id,))
+			conn.commit()
+			return True
+	except Exception as e:
+		logging.error(f"Error updating post have_video: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
+def get_post_by_date_and_type(date, pic_type):
+	"""
+	Ищет пост по дате и типу.
+	Возвращает post_id или None, если не найден.
+	"""
+	conn = get_connection()
+	if not conn:
+		return None
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				SELECT id FROM posts
+				WHERE date = %s AND type = %s
+				LIMIT 1
+			""", (date, pic_type))
+			row = cur.fetchone()
+			return row[0] if row else None
+	except Exception as e:
+		logging.error(f"Error getting post by date and type: {e}")
+		return None
+	finally:
+		return_connection(conn)
+
+
 def init_db():
 	"""Создаёт таблицу message_history, если её нет, и добавляет недостающие столбцы в users."""
 	conn = get_connection()
@@ -147,8 +222,23 @@ def init_db():
 				ADD COLUMN IF NOT EXISTS last_name TEXT,
 				ADD COLUMN IF NOT EXISTS username TEXT;
 			""")
+			# Добавление столбца have_video в таблицу posts, если его нет
+			cur.execute("""
+				ALTER TABLE posts
+				ADD COLUMN IF NOT EXISTS have_video BOOLEAN DEFAULT FALSE;
+			""")
+			# Создание таблицы videos, если её нет
+			cur.execute("""
+				CREATE TABLE IF NOT EXISTS videos (
+					id SERIAL PRIMARY KEY,
+					post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+					path TEXT NOT NULL,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_videos_post_id ON videos(post_id);
+			""")
 			conn.commit()
-			logging.info("Database initialization completed (message_history and users columns)")
+			logging.info("Database initialization completed (message_history, users columns, have_video, videos)")
 	except Exception as e:
 		logging.error(f"Error in init_db: {e}")
 	finally:
@@ -1020,6 +1110,70 @@ def add_coins(user_id, amount):
 		return False
 	finally:
 		return_connection(conn)
+
+
+def cleanup_by_json(json_path):
+    """
+    Читает JSON-файл со списком имён файлов, находит соответствующие записи в таблице pictures,
+    удаляет их из базы и удаляет файлы с диска.
+    Возвращает кортеж (удалено_записей, ошибки).
+    """
+    import json
+    if not os.path.isfile(json_path):
+        logging.error(f"JSON file not found: {json_path}")
+        return 0, ["Файл не найден"]
+    try:
+        with open(json_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except Exception as e:
+        logging.error(f"Failed to parse JSON {json_path}: {e}")
+        return 0, [f"Ошибка чтения JSON: {e}"]
+    if not isinstance(data, list):
+        logging.error(f"JSON is not a list: {json_path}")
+        return 0, ["JSON должен быть списком строк"]
+    
+    conn = get_connection()
+    if not conn:
+        return 0, ["Нет подключения к БД"]
+    
+    deleted = 0
+    errors = []
+    for filename in data:
+        if not isinstance(filename, str):
+            continue
+        # Ищем записи с таким path (точное совпадение)
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT id, type, path FROM pictures WHERE path = %s", (filename,))
+                rows = cur.fetchall()
+                if not rows:
+                    logging.debug(f"File {filename} not found in database")
+                    continue
+                for row in rows:
+                    image_id, img_type, img_path = row
+                    # Удаляем файл
+                    base_dir = IMAGE_DIR_ANIME if img_type == ImageType.ANIME.value else IMAGE_DIR_REAL
+                    full_path = os.path.join(base_dir, img_path)
+                    if os.path.isfile(full_path):
+                        try:
+                            os.remove(full_path)
+                            logging.info(f"Файл изображения удалён: {full_path}")
+                        except OSError as e:
+                            logging.warning(f"Не удалось удалить файл {full_path}: {e}")
+                            errors.append(f"Ошибка удаления файла {filename}: {e}")
+                    else:
+                        logging.warning(f"Файл изображения не найден: {full_path}")
+                    # Удаляем запись из базы
+                    cur.execute("DELETE FROM pictures WHERE id = %s", (image_id,))
+                    deleted += 1
+        except Exception as e:
+            logging.error(f"Error deleting image {filename}: {e}")
+            errors.append(f"Ошибка БД для {filename}: {e}")
+            conn.rollback()
+            continue
+    conn.commit()
+    return_connection(conn)
+    return deleted, errors
 
 
 def update_user_profile(user_id, first_name=None, last_name=None, username=None):

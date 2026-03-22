@@ -247,7 +247,10 @@ class BotController:
 					)
 				except Exception as e:
 					logging.error(f"Не удалось отправить уведомление админу {admin_id}: {e}")
-			logging.info(f"Новый пользователь зарегистрирован: {chat_id}, реферер: {referrer_id}")
+			first_name = user.get('first_name', '')
+			last_name = user.get('last_name', '')
+			username = user.get('username', '')
+			logging.info(f"Новый пользователь зарегистрирован: {chat_id}, имя: {first_name} {last_name}, username: @{username}, реферер: {referrer_id}")
 
 		# Удаляем последнюю картинку, если она есть
 		if chat_id in self.last_image_message_id:
@@ -699,22 +702,98 @@ class BotController:
 					return
 
 				await self.delete_current(chat_id, message_id)
-				await self.send_and_track(chat_id, text="🔄 Загрузка изображений...", track=False)
+				await self.send_and_track(chat_id, text="🔄 Загрузка контента...", track=False)
 				import time
 				start_time = time.time()
 				try:
-					total_anime, total_real = image_loader.load_images_from_default_folders()
+					result = image_loader.load_from_import_json()
 					elapsed = time.time() - start_time
-					report = (
-						f"✅ Загрузка завершена.\n"
-						f"Добавлено аниме: {total_anime}\n"
-						f"Добавлено фото: {total_real}\n"
+					report_lines = [
+						f"✅ Загрузка завершена.",
+						f"Добавлено аниме: {result.get('anime', 0)}",
+						f"Добавлено фото: {result.get('real', 0)}",
+						f"Добавлено видео: {result.get('videos', 0)}",
+						f"Ошибок: {len(result.get('errors', []))}",
 						f"Время выполнения: {elapsed:.2f} сек."
-					)
+					]
+					if result.get('errors'):
+						report_lines.append("\nОшибки:")
+						for err in result['errors'][:5]:  # показываем первые 5 ошибок
+							report_lines.append(f"  - {err}")
+					report = "\n".join(report_lines)
 				except Exception as e:
 					report = f"❌ Ошибка при загрузке: {e}"
 					logging.error(f"Ошибка в admin_load_images: {e}")
 				await self.send_and_track(chat_id, text=report, track=False)
+				# Возвращаем админ-меню
+				keyboard = keyboards.get_admin_panel_keyboard()
+				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+
+			elif callback.data == "admin_cleanup_json":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					await self.delete_current(chat_id, message_id)
+					return
+
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(chat_id, text="🧹 Чистка по JSON...", track=False)
+				import time
+				start_time = time.time()
+				json_path = os.path.join(os.path.dirname(__file__), "delete.json")
+				deleted, errors = database.cleanup_by_json(json_path)
+				elapsed = time.time() - start_time
+				if errors:
+					error_text = "\n".join(errors[:5])  # ограничим вывод
+					report = (
+						f"✅ Удалено записей: {deleted}\n"
+						f"⏱ Время выполнения: {elapsed:.2f} сек.\n"
+						f"⚠️ Ошибки:\n{error_text}"
+					)
+				else:
+					report = (
+						f"✅ Удалено записей: {deleted}\n"
+						f"⏱ Время выполнения: {elapsed:.2f} сек.\n"
+						f"✅ Ошибок нет."
+					)
+				await self.send_and_track(chat_id, text=report, track=False)
+				# Возвращаем админ-меню
+				keyboard = keyboards.get_admin_panel_keyboard()
+				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+
+			elif callback.data == "admin_logs":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					await self.delete_current(chat_id, message_id)
+					return
+
+				await self.delete_current(chat_id, message_id)
+				await self.send_and_track(chat_id, text="📋 Получение логов...", track=False)
+
+				log_file = os.path.join(os.path.dirname(__file__), "bot.log")
+				if not os.path.exists(log_file):
+					await self.send_and_track(chat_id, text="❌ Файл логов не найден.", track=False)
+				else:
+					# Отправляем файл логов как документ
+					document = FSInputFile(log_file)
+					await self.bot.send_document(chat_id, document, caption="📁 Файл логов")
+
+					# Читаем последние 25 строк лога
+					try:
+						with open(log_file, 'r', encoding='utf-8') as f:
+							lines = f.readlines()
+							last_lines = lines[-25:] if len(lines) >= 25 else lines
+							log_preview = "".join(last_lines).strip()
+							if not log_preview:
+								log_preview = "Логи пусты."
+					except Exception as e:
+						log_preview = f"Ошибка чтения логов: {e}"
+
+					await self.send_and_track(
+						chat_id,
+						text=f"📋 Последние {len(last_lines)} записей лога:\n```\n{log_preview}\n```",
+						track=False
+					)
+
 				# Возвращаем админ-меню
 				keyboard = keyboards.get_admin_panel_keyboard()
 				await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
