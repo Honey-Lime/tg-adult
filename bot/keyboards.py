@@ -147,5 +147,19 @@ def get_promo_links_menu_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Создать ссылку", callback_data="promo_create")],
         [InlineKeyboardButton(text="📊 Статистика", callback_data="promo_stats")],
+        [InlineKeyboardButton(text="🗑 Удалить ссылку", callback_data="promo_delete")],
         [InlineKeyboardButton(text="🔙 Назад", callback_data="admin_menu")]
     ])
+
+
+def get_promo_delete_list_keyboard(links: list) -> InlineKeyboardMarkup:
+    """
+    Клавиатура со списком ссылок для удаления.
+    links - список словарей с ключами 'id', 'name', 'clicks_count'.
+    """
+    buttons = []
+    for link in links:
+        btn_text = f"{link['name']} ({link['clicks_count']} переходов)"
+        buttons.append([InlineKeyboardButton(text=btn_text, callback_data=f"promo_del_{link['id']}")])
+    buttons.append([InlineKeyboardButton(text="🔙 Назад", callback_data="promo_links_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)

@@ -72,6 +72,7 @@ class BotController:
 		
 		# Состояние ожидания имени для рекламной ссылки
 		self.waiting_for_promo_name: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода имени ссылки)
+		self.waiting_for_promo_delete: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода номера для удаления)
 
 		self._register_handlers()
 		# Инициализация БД для истории сообщений
@@ -346,12 +347,23 @@ class BotController:
 			promo_name = message.text
 			success, result = database.create_promo_link(promo_name)
 			
+			# Сбрасываем состояние ожидания
+			self.waiting_for_promo_name[chat_id] = False
+			
 			if success:
 				bot_info = await self.bot.me()
 				promo_url = f"https://t.me/{bot_info.username}?start={result}"
 				await self.send_and_track(
 					chat_id,
-					text=f"✅ Рекламная ссылка создана:\n\n📛 Название: {promo_name}\n🔗 Ссылка: {promo_url}\n\nОтправьте ещё одно сообщение для создания новой ссылки или нажмите 'Назад' для выхода.",
+					text=f"✅ Рекламная ссылка создана:\n\n📛 Название: {promo_name}\n🔗 Ссылка: {promo_url}",
+					track=False
+				)
+				# Возвращаем в меню рекламных ссылок
+				keyboard = keyboards.get_promo_links_menu_keyboard()
+				await self.send_and_track(
+					chat_id,
+					text="🔗 Рекламные ссылки. Выберите действие:",
+					reply_markup=keyboard,
 					track=False
 				)
 			else:
@@ -360,7 +372,56 @@ class BotController:
 					text=f"❌ Ошибка при создании ссылки: {result}",
 					track=False
 				)
-				self.waiting_for_promo_name[chat_id] = False
+			
+			# Удаляем сообщение админа
+			try:
+				await message.delete()
+			except:
+				pass
+
+		# Обработка номера для удаления промо-ссылки
+		if chat_id in self.waiting_for_promo_delete and self.waiting_for_promo_delete[chat_id]:
+			if not message.text or not message.text.isdigit():
+				await message.answer("Пожалуйста, отправьте номер ссылки для удаления.")
+				return
+			
+			link_number = int(message.text)
+			promo_links = database.get_all_promo_links()
+			
+			if link_number < 1 or link_number > len(promo_links):
+				await self.send_and_track(
+					chat_id,
+					text=f"❌ Неверный номер. Введите число от 1 до {len(promo_links)}.",
+					track=False
+				)
+				return
+			
+			# Удаляем ссылку по номеру (индекс на 1 меньше)
+			link_to_delete = promo_links[link_number - 1]
+			success = database.delete_promo_link(link_to_delete['id'])
+			
+			if success:
+				await self.send_and_track(
+					chat_id,
+					text=f"🗑 Ссылка \"{link_to_delete['name']}\" удалена.",
+					track=False
+				)
+			else:
+				await self.send_and_track(
+					chat_id,
+					text="❌ Ошибка при удалении ссылки.",
+					track=False
+				)
+			
+			# Сбрасываем состояние и возвращаем меню
+			self.waiting_for_promo_delete[chat_id] = False
+			keyboard = keyboards.get_promo_links_menu_keyboard()
+			await self.send_and_track(
+				chat_id,
+				text="🔗 Рекламные ссылки. Выберите действие:",
+				reply_markup=keyboard,
+				track=False
+			)
 			
 			# Удаляем сообщение админа
 			try:
@@ -1046,6 +1107,37 @@ class BotController:
 
 				keyboard = keyboards.get_promo_links_menu_keyboard()
 				await self.send_and_track(chat_id, text=text, reply_markup=keyboard, track=False)
+
+			elif callback.data == "promo_delete":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+
+				await self.delete_current(chat_id, message_id)
+				promo_links = database.get_all_promo_links()
+				
+				if not promo_links:
+					text = "🗑 Удаление ссылок:\n\n❌ Пока нет созданных ссылок."
+					keyboard = keyboards.get_promo_links_menu_keyboard()
+					await self.send_and_track(chat_id, text=text, reply_markup=keyboard, track=False)
+				else:
+					# Формируем пронумерованный список
+					lines = ["🗑 Удаление ссылок. Отправьте номер ссылки для удаления:\n"]
+					for i, link in enumerate(promo_links, 1):
+						lines.append(f"{i}. 📛 {link['name']} | 👥 {link['clicks_count']} переходов")
+					text = "\n".join(lines)
+					
+					self.waiting_for_promo_delete[chat_id] = True
+					await self.send_and_track(chat_id, text=text, track=False)
+
+			elif callback.data == "promo_links_menu":
+				if chat_id not in self.admin_ids:
+					await callback.answer("⛔ Доступ запрещён")
+					return
+
+				await self.delete_current(chat_id, message_id)
+				keyboard = keyboards.get_promo_links_menu_keyboard()
+				await self.send_and_track(chat_id, text="🔗 Рекламные ссылки. Выберите действие:", reply_markup=keyboard, track=False)
 
 			elif callback.data == "admin_menu":
 				if chat_id not in self.admin_ids:

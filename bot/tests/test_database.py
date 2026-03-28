@@ -213,6 +213,27 @@ class TestPromoLinks:
         
         assert link is None
 
+    def test_delete_promo_link_success(self, mock_connection):
+        """Тест успешного удаления рекламной ссылки."""
+        mock_conn, mock_cursor = mock_connection
+        mock_cursor.rowcount = 1
+        
+        result = database.delete_promo_link(123)
+        
+        assert result is True
+        mock_cursor.execute.assert_called_with(
+            "DELETE FROM promo_links WHERE id = %s", (123,)
+        )
+
+    def test_delete_promo_link_not_found(self, mock_connection):
+        """Тест удаления несуществующей ссылки."""
+        mock_conn, mock_cursor = mock_connection
+        mock_cursor.rowcount = 0
+        
+        result = database.delete_promo_link(999)
+        
+        assert result is False
+
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

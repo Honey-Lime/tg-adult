@@ -1882,3 +1882,24 @@ def get_promo_link_by_code(code: str) -> dict:
         return None
     finally:
         return_connection(conn)
+
+
+def delete_promo_link(link_id: int) -> bool:
+    """
+    Удаляет рекламную ссылку по ID.
+    Возвращает True при успехе.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM promo_links WHERE id = %s", (link_id,))
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        logging.error(f"Error deleting promo link: {e}")
+        conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
