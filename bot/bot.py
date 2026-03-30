@@ -102,6 +102,7 @@ class BotController:
 			chat_id: int,
 			text: Optional[str] = None,
 			photo=None,
+			video=None,
 			reply_markup: Optional[InlineKeyboardMarkup] = None,
 			track: bool = True,
 	) -> types.Message:
@@ -122,7 +123,15 @@ class BotController:
 						self.message_history[chat_id].remove(oldest_id)
 
 		# Отправка сообщения
-		if photo:
+		if video:
+			sent = await self.bot.send_video(
+				chat_id,
+				video=video,
+				caption=text,
+				reply_markup=reply_markup,
+				protect_content=True,
+			)
+		elif photo:
 			sent = await self.bot.send_photo(
 				chat_id,
 				photo=photo,
