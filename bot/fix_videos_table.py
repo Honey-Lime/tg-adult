@@ -5,10 +5,18 @@
 """
 import psycopg2
 import logging
-from config_reader import config
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# Параметры подключения из .env
+DB_CONFIG = {
+    'database': 'adult_tg_bot_db',
+    'user': 'adult_tg_bot',
+    'password': 'm*0FaIw$2!amS',
+    'host': 'localhost',
+    'port': 5432
+}
 
 
 def fix_videos_table():
@@ -16,13 +24,7 @@ def fix_videos_table():
     
     conn = None
     try:
-        conn = psycopg2.connect(
-            database=config.db_name,
-            user=config.db_user,
-            password=config.db_password.get_secret_value(),
-            host=config.db_host,
-            port=config.db_port
-        )
+        conn = psycopg2.connect(**DB_CONFIG)
         conn.autocommit = False
         
         with conn.cursor() as cur:
