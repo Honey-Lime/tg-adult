@@ -1327,13 +1327,13 @@ class BotController:
 			caption_text = f"Видео | {coins}🪙"
 			keyboard = keyboards.get_video_keyboard()
 
-		video_file = FSInputFile(video_path)
-		sent = await self.send_and_track(
-			chat_id,
-			video=video_file,
-			text=caption_text,
-			reply_markup=keyboard,
-		)
+			video_file = FSInputFile(video_path)
+			sent = await self.send_and_track(
+				chat_id,
+				video=video_file,
+				text=caption_text,
+				reply_markup=keyboard,
+			)
 
 			self.last_video_message_id[chat_id] = sent.message_id
 			self.last_video_send_time[chat_id] = now
