@@ -129,11 +129,21 @@ def add_video_record(post_id, path):
 	Добавляет запись о видео в таблицу videos.
 	Возвращает ID видео при успехе, иначе False.
 	"""
+	if not post_id:
+		logging.error(f"add_video_record: Invalid post_id={post_id}")
+		return False
+	
 	conn = get_connection()
 	if not conn:
 		return False
 	try:
 		with conn.cursor() as cur:
+			# Проверяем, существует ли пост
+			cur.execute("SELECT id FROM posts WHERE id = %s", (post_id,))
+			if not cur.fetchone():
+				logging.error(f"add_video_record: Post {post_id} does not exist")
+				return False
+			
 			cur.execute("""
 				INSERT INTO videos (post_id, path)
 				VALUES (%s, %s)
