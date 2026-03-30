@@ -1284,19 +1284,23 @@ class BotController:
 				return
 
 			# Получаем видео в зависимости от типа
+			video_path = None
 			video = None
 			if video_type == 'top25':
-				video = database.get_video_top25(chat_id)
+				video_path, video = database.get_video_top25(chat_id)
 			elif video_type == 'good':
-				video = database.get_video_good(chat_id)
+				video_path, video = database.get_video_good(chat_id)
 			elif video_type == 'free':
-				video = database.get_video_free(chat_id)
+				video_path, video = database.get_video_free(chat_id)
 
 			if not video:
 				await self.send_and_track(chat_id, text="Нет доступных видео")
 				return
 
-			video_path = os.path.join(database.VIDEO_DIR, video['path'])
+			if not os.path.isfile(video_path):
+				logging.error(f"Файл видео не найден: {video_path}")
+				await self.send_and_track(chat_id, text="Ошибка: файл видео отсутствует")
+				return
 			if not os.path.isfile(video_path):
 				logging.error(f"Файл видео не найден: {video_path}")
 				await self.send_and_track(chat_id, text="Ошибка: файл видео отсутствует")
