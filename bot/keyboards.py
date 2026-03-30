@@ -174,3 +174,13 @@ def get_clear_folder_confirm_keyboard() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="✅ Да, удалить все файлы", callback_data="admin_clear_import_folder_confirm"),
          InlineKeyboardButton(text="❌ Отмена", callback_data="admin_clear_import_folder_cancel")]
     ])
+
+
+def get_video_retry_keyboard(last_video_type: str) -> InlineKeyboardMarkup:
+    """
+    Клавиатура с кнопкой "Повторить" для сообщения о 30-секундном ожидании.
+    last_video_type - тип последнего запрошенного видео ('top25', 'good', 'free').
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🔄 Повторить", callback_data=f"video_retry_{last_video_type}")]
+    ])

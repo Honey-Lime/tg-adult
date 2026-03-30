@@ -64,6 +64,7 @@ class BotController:
 		self.last_video_message_id: Dict[int, int] = {}		  # chat_id -> message_id последнего видео
 		self.sending_video: Dict[int, bool] = {}				# chat_id -> флаг, выполняется ли сейчас отправка видео
 		self.last_video_send_time: Dict[int, float] = {}		# chat_id -> время последней отправки видео (для rate limit)
+		self.last_video_type: Dict[int, str] = {}				# chat_id -> тип последнего запрошенного видео ('top25', 'good', 'free')
 
 		# Состояние ожидания пользовательского сообщения для рассылки
 		self.waiting_for_custom_message: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода сообщения)
@@ -74,9 +75,8 @@ class BotController:
 		self.waiting_for_promo_delete: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода номера для удаления)
 
 		self._register_handlers()
-		# Инициализация БД для истории сообщений
-		database.init_db()
-		self._load_message_history_from_db()
+		# История сообщений загружается лениво при первом использовании
+		self._message_history_loaded = False
 
 
 	def _register_handlers(self) -> None:
@@ -108,6 +108,7 @@ class BotController:
 	) -> types.Message:
 		# Проверяем лимит и удаляем самое старое, если нужно
 		if track:
+			self._ensure_message_history_loaded()
 			count = database.count_messages(chat_id)
 			if count >= 10:
 				oldest_id = database.get_oldest_message(chat_id)
@@ -154,18 +155,22 @@ class BotController:
 		return sent
 
 	def remove_from_history(self, chat_id: int, message_id: int) -> None:
+		self._ensure_message_history_loaded()
 		if chat_id in self.message_history and message_id in self.message_history[chat_id]:
 			self.message_history[chat_id].remove(message_id)
 		# Удаляем из БД в любом случае
 		database.delete_message_record(chat_id, message_id)
 
-	def _load_message_history_from_db(self):
-		"""Восстанавливает message_history из базы данных."""
+	def _ensure_message_history_loaded(self):
+		"""Ленивая загрузка истории сообщений из БД (вызывается один раз)."""
+		if self._message_history_loaded:
+			return
 		db_history = database.load_all_message_history()
 		for chat_id, msg_ids in db_history.items():
 			# Оставляем только последние 10 (на случай, если в БД больше)
 			self.message_history[chat_id] = msg_ids[-10:]
 		logging.info(f"Loaded message history for {len(self.message_history)} chats")
+		self._message_history_loaded = True
 
 	async def _update_user_profile_from_message(self, message: Message) -> None:
 		"""
@@ -739,6 +744,12 @@ class BotController:
 				await self.delete_current(chat_id, message_id)
 				await self.send_video(chat_id, 'free')
 
+			elif callback.data.startswith("video_retry_"):
+				# Повтор запроса видео после 30-секундного ожидания
+				video_type = callback.data.split('_')[2]
+				await self.delete_current(chat_id, message_id)
+				await self.send_video(chat_id, video_type)
+
 			elif callback.data == "video_like":
 				# Лайк на видео
 				if chat_id not in self.last_video_data:
@@ -1301,11 +1312,16 @@ class BotController:
 				)
 				return
 
+			# Сохраняем тип видео для возможного повтора
+			self.last_video_type[chat_id] = video_type
+
 			# Проверяем, можно ли смотреть видео (ограничение 30 секунд)
 			if not database.can_watch_video(chat_id):
+				keyboard = keyboards.get_video_retry_keyboard(video_type)
 				await self.send_and_track(
 					chat_id,
 					text="⏳ Подождите 30 секунд перед просмотром следующего видео.",
+					reply_markup=keyboard,
 					track=False
 				)
 				return
