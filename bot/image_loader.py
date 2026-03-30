@@ -220,6 +220,10 @@ def load_from_import_json():
         pictures = entry.get('pictures', [])
         videos = entry.get('videos', [])
 
+        # Нормализуем пути: заменяем обратные слеши на прямые
+        pictures = [p.replace('\\', '/') for p in pictures]
+        videos = [v.replace('\\', '/') for v in videos]
+
         # Определяем тип по первому фото (если есть)
         pic_type = None
         if pictures:
@@ -266,8 +270,6 @@ def load_from_import_json():
                 errors += 1
                 continue
 
-            # Нормализуем путь: заменяем обратные слеши на прямые
-            pic_rel_path = pic_rel_path.replace('\\', '/')
             filename = Path(pic_rel_path).name
             src_path = src_dir / filename
             if not src_path.exists():
@@ -314,8 +316,6 @@ def load_from_import_json():
                 logging.warning(f"Не удалось установить have_video для поста {post_id}")
 
             for video_rel_path in videos:
-                # Нормализуем путь: заменяем обратные слеши на прямые
-                video_rel_path = video_rel_path.replace('\\', '/')
                 # Видео могут быть в папке videos или прямо в new/videos
                 filename = Path(video_rel_path).name
                 src_path = NEW_VIDEOS_DIR / filename
