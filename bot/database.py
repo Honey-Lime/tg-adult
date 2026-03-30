@@ -209,6 +209,85 @@ def get_post_by_date_and_type(date, pic_type):
 		return_connection(conn)
 
 
+def fix_videos_sequence():
+	"""
+	Исправляет последовательность для поля id в таблице videos.
+	Вызывается автоматически при инициализации БД.
+	Не удаляет данные, только настраивает автоинкремент.
+	"""
+	conn = get_connection()
+	if not conn:
+		return False
+	
+	try:
+		with conn.cursor() as cur:
+			# Проверяем, существует ли таблица videos
+			cur.execute("""
+				SELECT EXISTS (
+					SELECT FROM information_schema.tables 
+					WHERE table_name = 'videos'
+				)
+			""")
+			if not cur.fetchone()[0]:
+				return False  # Таблицы ещё нет
+			
+			# Проверяем текущую последовательность
+			cur.execute("""
+				SELECT pg_get_serial_sequence('videos', 'id')
+			""")
+			seq_name = cur.fetchone()[0]
+			
+			if not seq_name:
+				# Последовательности нет - пересоздаём поле id как SERIAL
+				logging.warning("Последовательность videos не найдена. Пересоздание...")
+				cur.execute("ALTER TABLE videos DROP CONSTRAINT IF EXISTS videos_pkey;")
+				cur.execute("ALTER TABLE videos DROP COLUMN id;")
+				cur.execute("ALTER TABLE videos ADD COLUMN id SERIAL PRIMARY KEY;")
+				logging.info("✓ Поле id таблицы videos пересоздано как SERIAL")
+				conn.commit()
+				return True
+			
+			# Проверяем, нужно ли исправлять последовательность
+			cur.execute("""
+				SELECT 
+					COALESCE((SELECT MAX(id) FROM videos), 0) as max_id,
+					(SELECT COUNT(*) FROM videos) as row_count
+			""")
+			row = cur.fetchone()
+			max_id = row[0]
+			row_count = row[1]
+			
+			if row_count == 0:
+				# Таблица пустая - устанавливаем sequence в 1
+				cur.execute("SELECT setval(%s, 1, false)", (seq_name,))
+				logging.info("✓ Последовательность videos_id_seq установлена в 1 (таблица пустая)")
+			else:
+				# Проверяем текущее значение последовательности
+				cur.execute(f"SELECT last_value, is_called FROM {seq_name}")
+				seq_info = cur.fetchone()
+				last_value = seq_info[0]
+				is_called = seq_info[1]
+				
+				# Если последовательность уже настроена правильно (last_value >= max_id и is_called=true)
+				if is_called and last_value >= max_id:
+					logging.debug(f"Последовательность videos_id_seq уже настроена (last={last_value}, max={max_id})")
+					return True
+				
+				# Исправляем последовательность
+				cur.execute("SELECT setval(%s, %s, false)", (seq_name, max_id + 1))
+				logging.info(f"✓ Последовательность videos_id_seq исправлена (max_id={max_id}, next={max_id + 1})")
+			
+			conn.commit()
+			return True
+			
+	except Exception as e:
+		logging.error(f"Ошибка при исправлении последовательности videos: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
 def init_db():
 	"""Создаёт таблицу message_history, если её нет, и добавляет недостающие столбцы в users."""
 	conn = get_connection()
@@ -282,6 +361,10 @@ def init_db():
 			""")
 			conn.commit()
 			logging.info("Promo links tables initialized")
+			
+			# Исправление последовательности videos (если проблема с id)
+			fix_videos_sequence()
+			
 	except Exception as e:
 		logging.error(f"Error in init_db: {e}")
 	finally:
