@@ -60,11 +60,9 @@ Telegram-бот для просмотра и оценки изображений
    - `BOT_TOKEN` - токен бота
    - `DB_NAME`, `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT` - параметры PostgreSQL
    - `ADMIN_IDS` - ID администраторов через запятую
-4. Примените миграцию базы данных (добавление столбца language):
-   ```bash
-   python bot/migrations/add_language_column.py
-   ```
-5. Запустите бота: `python bot/bot.py`
+4. Запустите бота: `python bot/bot.py`
+
+При запуске бот автоматически проверит и добавит необходимые столбцы в базу данных.
 
 ## Тесты
 

@@ -305,14 +305,25 @@ def init_db():
 				);
 				CREATE INDEX IF NOT EXISTS idx_message_history_chat_id ON message_history(chat_id);
 			""")
-			# Добавление столбцов first_name, last_name, username, language в таблицу users, если их нет
+			# Добавление столбцов first_name, last_name, username в таблицу users, если их нет
 			cur.execute("""
 				ALTER TABLE users
 				ADD COLUMN IF NOT EXISTS first_name TEXT,
 				ADD COLUMN IF NOT EXISTS last_name TEXT,
-				ADD COLUMN IF NOT EXISTS username TEXT,
-				ADD COLUMN IF NOT EXISTS language TEXT DEFAULT 'ru';
+				ADD COLUMN IF NOT EXISTS username TEXT;
 			""")
+			# Проверка и добавление столбца language (отдельно, т.к. ADD COLUMN IF NOT EXISTS не работает с DEFAULT в некоторых версиях PostgreSQL)
+			cur.execute("""
+				SELECT column_name 
+				FROM information_schema.columns 
+				WHERE table_name = 'users' AND column_name = 'language'
+			""")
+			if not cur.fetchone():
+				cur.execute("""
+					ALTER TABLE users
+					ADD COLUMN language TEXT DEFAULT 'ru'
+				""")
+				logging.info("✓ Добавлен столбец language в таблицу users")
 			# Добавление столбца have_video в таблицу posts, если его нет
 			cur.execute("""
 				ALTER TABLE posts
