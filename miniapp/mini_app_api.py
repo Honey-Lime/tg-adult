@@ -30,6 +30,12 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
 # Раздача статических файлов (фронтенд)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+# Раздача изображений
+app.mount("/images", StaticFiles(directory="../bot/images"), name="images")
+
+# Раздача видео
+app.mount("/videos", StaticFiles(directory="../bot/images/videos"), name="videos")
+
 DB_HOST = os.getenv("DB_HOST")
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
@@ -118,6 +124,36 @@ async def get_saved(user_id: int):
 			return images
 	except Exception as e:
 		logger.error(f"Error in get_saved: {e}")
+		raise HTTPException(status_code=500, detail=str(e))
+	finally:
+		conn.close()
+
+@app.get("/api/liked_videos")
+@cached_with_ttl(ttl=10)
+async def get_liked_videos(user_id: int):
+	logger.info(f"get_liked_videos called with user_id={user_id}")
+	conn = get_db_connection()
+	try:
+		with conn.cursor() as cur:
+			# Получаем ID лайкнутых видео пользователя
+			cur.execute("SELECT liked_videos FROM users WHERE id = %s", (user_id,))
+			row = cur.fetchone()
+			if not row or not row['liked_videos']:
+				logger.info("No liked videos")
+				return []
+			liked_video_ids = row['liked_videos']
+			# Запрашиваем видео и сортируем по value
+			cur.execute("""
+				SELECT id, path, likes, dislikes, value, 0 as type
+				FROM videos
+				WHERE id = ANY(%s)
+				ORDER BY value DESC
+			""", (liked_video_ids,))
+			videos = cur.fetchall()
+			logger.info(f"Found {len(videos)} liked videos")
+			return videos
+	except Exception as e:
+		logger.error(f"Error in get_liked_videos: {e}")
 		raise HTTPException(status_code=500, detail=str(e))
 	finally:
 		conn.close()

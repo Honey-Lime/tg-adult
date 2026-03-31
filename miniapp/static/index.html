@@ -1,288 +1,379 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Image Gallery</title>
     <style>
-        body {
-            margin: 0;
-            padding: 16px;
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            padding-left: env(safe-area-inset-left);
-            padding-right: env(safe-area-inset-right);
-            background: var(--tg-theme-bg-color, #fff);
-            color: var(--tg-theme-text-color, #000);
-        }
+      body {
+        margin: 0;
+        padding: 16px;
+        padding-top: env(safe-area-inset-top);
+        padding-bottom: env(safe-area-inset-bottom);
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+        background: var(--tg-theme-bg-color, #fff);
+        color: var(--tg-theme-text-color, #000);
+      }
 
-        /* Стили для кнопки полноэкранного режима */
+      /* Стили для кнопки полноэкранного режима */
+      .fullscreen-btn {
+        flex: none;
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background: var(--tg-theme-button-color, #2481cc);
+        color: var(--tg-theme-button-text-color, #fff);
+        padding: 12px 20px;
+        border-radius: 30px;
+        cursor: pointer;
+        font-size: 16px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        z-index: 1000;
+      }
+
+      /* Адаптация для узких экранов */
+      @media (max-width: 600px) {
         .fullscreen-btn {
-            flex: none;
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            background: var(--tg-theme-button-color, #2481cc);
-            color: var(--tg-theme-button-text-color, #fff);
-            padding: 12px 20px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 16px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-            z-index: 1000;
+          bottom: 10px;
+          right: 10px;
+          padding: 8px 16px;
+          font-size: 14px;
         }
+      }
+      .menu {
+        display: flex;
+        gap: 8px;
+        margin-bottom: 20px;
+        flex-wrap: wrap;
+      }
+      .menu button {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        background: var(--tg-theme-button-color, #2481cc);
+        color: var(--tg-theme-button-text-color, #fff);
+        font-size: 16px;
+        cursor: pointer;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 16px;
+      }
+      .card {
+        background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+      .card:hover img {
+        transform: scale(1.05);
+      }
+      .card:hover video {
+        transform: scale(1.05);
+      }
+      .card img {
+        width: 100%;
+        height: 300px;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.2s ease-in-out;
+      }
+      .card video {
+        width: 100%;
+        height: 300px;
+        object-fit: cover;
+        display: block;
+        transition: transform 0.2s ease-in-out;
+      }
+      .card .info {
+        padding: 12px;
+        font-size: 16px;
+      }
+      .card .value {
+        font-weight: bold;
+        color: var(--tg-theme-link-color, #2481cc);
+      }
+      .loading {
+        text-align: center;
+        padding: 40px;
+        font-size: 18px;
+      }
+      /* Модальное окно */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 1000;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.9);
+        overflow: auto;
+      }
+      .modal-content {
+        margin: auto;
+        display: block;
+        max-width: 90%;
+        max-height: 80%;
+        object-fit: contain;
+        margin-top: 5%;
+      }
+      #caption {
+        margin: auto;
+        display: block;
+        width: 80%;
+        max-width: 700px;
+        text-align: center;
+        color: #ccc;
+        padding: 10px 0;
+      }
+      .close {
+        position: absolute;
+        top: 15px;
+        right: 35px;
+        color: #f1f1f1;
+        font-size: 40px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.3s;
+      }
+      .close:hover,
+      .close:focus {
+        color: #bbb;
+        text-decoration: none;
+        cursor: pointer;
+      }
 
-        /* Адаптация для узких экранов */
-        @media (max-width: 600px) {
-            .fullscreen-btn {
-                bottom: 10px;
-                right: 10px;
-                padding: 8px 16px;
-                font-size: 14px;
-            }
-        }
-        .menu {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-        }
-        .menu button {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 8px;
-            background: var(--tg-theme-button-color, #2481cc);
-            color: var(--tg-theme-button-text-color, #fff);
-            font-size: 16px;
-            cursor: pointer;
-        }
+      /* Адаптивность для маленьких экранов */
+      @media (max-width: 600px) {
         .gallery {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-            gap: 16px;
-        }
-        .card {
-            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        .card:hover img {
-            transform: scale(1.05);
+          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
         }
         .card img {
-            width: 100%;
-            height: 300px;
-            object-fit: cover;
-            display: block;
-            transition: transform 0.2s ease-in-out;
+          height: 200px;
         }
-        .card .info {
-            padding: 12px;
-            font-size: 16px;
-        }
-        .card .value {
-            font-weight: bold;
-            color: var(--tg-theme-link-color, #2481cc);
-        }
-        .loading {
-            text-align: center;
-            padding: 40px;
-            font-size: 18px;
-        }
-        /* Модальное окно */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.9);
-            overflow: auto;
-        }
-        .modal-content {
-            margin: auto;
-            display: block;
-            max-width: 90%;
-            max-height: 80%;
-            object-fit: contain;
-            margin-top: 5%;
-        }
-        #caption {
-            margin: auto;
-            display: block;
-            width: 80%;
-            max-width: 700px;
-            text-align: center;
-            color: #ccc;
-            padding: 10px 0;
-        }
-        .close {
-            position: absolute;
-            top: 15px;
-            right: 35px;
-            color: #f1f1f1;
-            font-size: 40px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        .close:hover,
-        .close:focus {
-            color: #bbb;
-            text-decoration: none;
-            cursor: pointer;
-        }
-
-        /* Адаптивность для маленьких экранов */
-        @media (max-width: 600px) {
-            .gallery {
-                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            }
-            .card img {
-                height: 200px;
-            }
-        }
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <div class="menu">
-        <button id="topAnimeBtn">Топ аниме</button>
-        <button id="topRealBtn">Топ фото</button>
-        <button id="savedBtn">Сохраненные</button>
+      <button id="topAnimeBtn">Топ аниме</button>
+      <button id="topRealBtn">Топ фото</button>
+      <button id="savedBtn">Сохраненные</button>
+      <button id="videosBtn">🎬 Видео</button>
     </div>
     <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
     <div id="gallery" class="gallery">
-        <div class="loading">Загрузка...</div>
+      <div class="loading">Загрузка...</div>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-        const tg = window.Telegram.WebApp;
-        tg.expand();
+      const tg = window.Telegram.WebApp;
+      tg.expand();
 
-        const urlParams = new URLSearchParams(window.location.search);
-        const userId = urlParams.get('user_id');
+      const urlParams = new URLSearchParams(window.location.search);
+      const userId = urlParams.get("user_id");
 
-        const gallery = document.getElementById('gallery');
-        const topAnimeBtn = document.getElementById('topAnimeBtn');
-        const topRealBtn = document.getElementById('topRealBtn');
-        const savedBtn = document.getElementById('savedBtn');
+      const gallery = document.getElementById("gallery");
+      const topAnimeBtn = document.getElementById("topAnimeBtn");
+      const topRealBtn = document.getElementById("topRealBtn");
+      const savedBtn = document.getElementById("savedBtn");
+      const videosBtn = document.getElementById("videosBtn");
 
-        async function loadImages(endpoint) {
-            gallery.innerHTML = '<div class="loading">Загрузка...</div>';
-            try {
-                const response = await fetch(endpoint);
-                const images = await response.json();
-                renderGallery(images);
-            } catch (error) {
-                gallery.innerHTML = '<div class="loading">Ошибка загрузки</div>';
-                console.error(error);
-            }
+      async function loadImages(endpoint) {
+        gallery.innerHTML = '<div class="loading">Загрузка...</div>';
+        try {
+          const response = await fetch(endpoint);
+          const images = await response.json();
+          renderGallery(images);
+        } catch (error) {
+          gallery.innerHTML = '<div class="loading">Ошибка загрузки</div>';
+          console.error(error);
         }
+      }
 
-        function renderGallery(images) {
-            if (images.length === 0) {
-                gallery.innerHTML = '<div class="loading">Нет изображений</div>';
-                return;
-            }
-            const html = images.map(img => {
-                const typeText = img.type === 0 ? 'Аниме' : 'Фото';
-                const folder = img.type === 0 ? 'anime' : 'real';
-                const imageUrl = `/images/${folder}/${img.path}`;
-                return `
-                    <div class="card" onclick="openModal('${imageUrl}', '${typeText}')">
-                        <img src="${imageUrl}" alt="Image ${img.id}" loading="lazy">
-                        <div class="info">
-                            <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
-                            <div class="value">⭐ ${img.value}</div>
-                            <div>${typeText}</div>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            gallery.innerHTML = html;
+      function renderGallery(images) {
+        if (images.length === 0) {
+          gallery.innerHTML = '<div class="loading">Нет элементов</div>';
+          return;
         }
+        const html = images
+          .map((img) => {
+            // Проверяем, видео ли это (для видео в API возвращаем type=0, но у видео есть поле id из таблицы videos)
+            // Для простоты используем наличие поля path и его формат - видео имеют путь к .mp4 файлам
+            const isVideo =
+              img.path.endsWith(".mp4") || img.path.endsWith(".mov");
+            const typeText = isVideo
+              ? "🎬 Видео"
+              : img.type === 0
+                ? "Аниме"
+                : "Фото";
+            const mediaUrl = isVideo
+              ? `/videos/${img.path}`
+              : `/images/${img.type === 0 ? "anime" : "real"}/${img.path}`;
 
-        topAnimeBtn.addEventListener('click', () => {
-            loadImages('/api/top?type=0');
-        });
-
-        topRealBtn.addEventListener('click', () => {
-            loadImages('/api/top?type=1');
-        });
-
-        savedBtn.addEventListener('click', () => {
-            if (!userId) {
-                gallery.innerHTML = '<div class="loading">Ошибка: не удалось определить пользователя</div>';
-                return;
-            }
-            loadImages(`/api/saved?user_id=${userId}`);
-        });
-
-        // Загружаем топ аниме по умолчанию
-        loadImages('/api/top?type=0');
-
-        // Модальное окно
-        function openModal(imageSrc, altText) {
-            const modal = document.getElementById('imageModal');
-            const modalImg = document.getElementById('modalImage');
-            const captionText = document.getElementById('caption');
-            modal.style.display = 'block';
-            modalImg.src = imageSrc;
-            captionText.innerHTML = altText;
-        }
-
-        function closeModal() {
-            document.getElementById('imageModal').style.display = 'none';
-        }
-
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Escape') {
-                closeModal();
-            }
-        });
-
-        // ========== Полноэкранный режим ==========
-        let fullscreenActive = false;
-        const fullscreenBtn = document.getElementById('fullscreenBtn');
-
-        function updateFullscreenButton() {
-            fullscreenBtn.textContent = fullscreenActive ? '⛶ Свернуть' : '⛶ На весь экран';
-        }
-
-        function toggleFullscreen() {
-            if (!tg.isVersionAtLeast('8.0')) {
-                alert('Полноэкранный режим не поддерживается в вашей версии Telegram');
-                return;
-            }
-            if (fullscreenActive) {
-                tg.exitFullscreen();
+            if (isVideo) {
+              return `
+                <div class="card video-card" onclick="openVideoModal('${mediaUrl}', '${typeText}')">
+                  <video src="${mediaUrl}" alt="Video ${img.id}" loading="lazy" style="width: 100%; height: 300px; object-fit: cover;"></video>
+                  <div class="info">
+                    <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
+                    <div class="value">⭐ ${img.value}</div>
+                    <div>${typeText}</div>
+                  </div>
+                </div>
+              `;
             } else {
-                tg.requestFullscreen();
+              return `
+                <div class="card" onclick="openModal('${mediaUrl}', '${typeText}')">
+                  <img src="${mediaUrl}" alt="Image ${img.id}" loading="lazy">
+                  <div class="info">
+                    <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
+                    <div class="value">⭐ ${img.value}</div>
+                    <div>${typeText}</div>
+                  </div>
+                </div>
+              `;
             }
+          })
+          .join("");
+        gallery.innerHTML = html;
+      }
+
+      topAnimeBtn.addEventListener("click", () => {
+        loadImages("/api/top?type=0");
+      });
+
+      topRealBtn.addEventListener("click", () => {
+        loadImages("/api/top?type=1");
+      });
+
+      savedBtn.addEventListener("click", () => {
+        if (!userId) {
+          gallery.innerHTML =
+            '<div class="loading">Ошибка: не удалось определить пользователя</div>';
+          return;
+        }
+        loadImages(`/api/saved?user_id=${userId}`);
+      });
+
+      videosBtn.addEventListener("click", () => {
+        if (!userId) {
+          gallery.innerHTML =
+            '<div class="loading">Ошибка: не удалось определить пользователя</div>';
+          return;
+        }
+        loadImages(`/api/liked_videos?user_id=${userId}`);
+      });
+
+      // Загружаем топ аниме по умолчанию
+      loadImages("/api/top?type=0");
+
+      // Модальное окно для изображений
+      function openModal(imageSrc, altText) {
+        const modal = document.getElementById("imageModal");
+        const modalImg = document.getElementById("modalImage");
+        const modalVideo = document.getElementById("modalVideo");
+        const captionText = document.getElementById("caption");
+
+        // Скрываем видео, показываем изображение
+        if (modalVideo) modalVideo.style.display = "none";
+        modalImg.style.display = "block";
+
+        modal.style.display = "block";
+        modalImg.src = imageSrc;
+        captionText.innerHTML = altText;
+      }
+
+      // Модальное окно для видео
+      function openVideoModal(videoSrc, altText) {
+        const modal = document.getElementById("imageModal");
+        const modalImg = document.getElementById("modalImage");
+        const modalVideo = document.getElementById("modalVideo");
+        const captionText = document.getElementById("caption");
+
+        // Скрываем изображение, показываем видео
+        modalImg.style.display = "none";
+        if (modalVideo) {
+          modalVideo.style.display = "block";
+          modalVideo.src = videoSrc;
+          modalVideo.play();
         }
 
-        fullscreenBtn.addEventListener('click', toggleFullscreen);
+        modal.style.display = "block";
+        captionText.innerHTML = altText;
+      }
 
-        tg.onEvent('fullscreenChanged', () => {
-            fullscreenActive = tg.isFullscreen;
-            updateFullscreenButton();
-        });
+      function closeModal() {
+        const modal = document.getElementById("imageModal");
+        const modalVideo = document.getElementById("modalVideo");
 
+        // Останавливаем видео при закрытии
+        if (modalVideo) {
+          modalVideo.pause();
+          modalVideo.src = "";
+        }
+
+        modal.style.display = "none";
+      }
+
+      document.addEventListener("keydown", function (event) {
+        if (event.key === "Escape") {
+          closeModal();
+        }
+      });
+
+      // ========== Полноэкранный режим ==========
+      let fullscreenActive = false;
+      const fullscreenBtn = document.getElementById("fullscreenBtn");
+
+      function updateFullscreenButton() {
+        fullscreenBtn.textContent = fullscreenActive
+          ? "⛶ Свернуть"
+          : "⛶ На весь экран";
+      }
+
+      function toggleFullscreen() {
+        if (!tg.isVersionAtLeast("8.0")) {
+          alert(
+            "Полноэкранный режим не поддерживается в вашей версии Telegram",
+          );
+          return;
+        }
+        if (fullscreenActive) {
+          tg.exitFullscreen();
+        } else {
+          tg.requestFullscreen();
+        }
+      }
+
+      fullscreenBtn.addEventListener("click", toggleFullscreen);
+
+      tg.onEvent("fullscreenChanged", () => {
+        fullscreenActive = tg.isFullscreen;
         updateFullscreenButton();
+      });
+
+      updateFullscreenButton();
     </script>
 
     <!-- Модальное окно -->
     <div id="imageModal" class="modal" onclick="closeModal()">
-        <span class="close">&times;</span>
-        <img class="modal-content" id="modalImage">
-        <div id="caption"></div>
+      <span class="close">&times;</span>
+      <img class="modal-content" id="modalImage" style="display: block" />
+      <video
+        class="modal-content"
+        id="modalVideo"
+        style="display: none"
+        controls
+      ></video>
+      <div id="caption"></div>
     </div>
-</body>
+  </body>
 </html>
