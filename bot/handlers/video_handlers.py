@@ -119,20 +119,17 @@ async def handle_video_like(controller, chat_id: int, message_id: int, lang: str
             reply_markup=keyboard,
         )
         
-        # Через 2 секунды показываем меню выбора видео
-        asyncio.create_task(_show_video_menu_delayed(controller, chat_id, message_id, lang))
+        # Через 2 секунды показываем меню выбора видео (не удаляя видео)
+        asyncio.create_task(_show_video_menu_delayed(controller, chat_id, lang))
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'error'), track=False)
 
 
-async def _show_video_menu_delayed(controller, chat_id: int, message_id: int, lang: str):
-    """Показ меню выбора видео с задержкой 2 секунды"""
+async def _show_video_menu_delayed(controller, chat_id: int, lang: str):
+    """Показ меню выбора видео с задержкой 2 секунды (не удаляя видео)"""
     await asyncio.sleep(2)
     
-    # Удаляем сообщение с видео
-    await controller.delete_current(chat_id, message_id)
-    
-    # Показываем меню выбора видео
+    # Показываем меню выбора видео новым сообщением (не удаляя видео)
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     keyboard = get_video_menu_keyboard(lang)
@@ -170,8 +167,8 @@ async def handle_video_dislike(controller, chat_id: int, message_id: int, lang: 
             reply_markup=keyboard,
         )
         
-        # Через 2 секунды показываем меню выбора видео
-        asyncio.create_task(_show_video_menu_delayed(controller, chat_id, message_id, lang))
+        # Через 2 секунды показываем меню выбора видео (не удаляя видео)
+        asyncio.create_task(_show_video_menu_delayed(controller, chat_id, lang))
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'error'), track=False)
 
@@ -229,9 +226,14 @@ async def handle_video_save(controller, chat_id: int, message_id: int, lang: str
     success = database.video_save(chat_id, video_id)
     
     if success:
-        await controller.remove_keyboard(chat_id, message_id)
+        # Просто скрываем клавиатуру, не удаляя видео
+        await controller.bot.edit_message_reply_markup(
+            chat_id=chat_id,
+            message_id=message_id,
+            reply_markup=None,
+        )
         
-        # Возврат в меню выбора видео
+        # Возврат в меню выбора видео новым сообщением (не удаляя видео)
         user = database.get_user(chat_id)
         coins = user.get('coins', 0) if user else 0
         keyboard = get_video_menu_keyboard(lang)
@@ -243,7 +245,7 @@ async def handle_video_save(controller, chat_id: int, message_id: int, lang: str
     else:
         await controller.send_and_track(
             chat_id,
-            text=get_text(lang, 'insufficient_coins'),
+            text="❌ Ошибка при сохранении видео. Возможно, оно уже сохранено.",
             track=False,
         )
 
