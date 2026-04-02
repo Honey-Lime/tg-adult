@@ -1755,8 +1755,9 @@ def video_dislike(user_id, video_id):
 
 def video_save(user_id, video_id):
     """
-    Сохранение видео: добавляет в saved_videos и liked_videos, списывает 50 монет,
-    увеличивает likes, total, value на 1.
+    Сохранение видео: добавляет в saved_videos, списывает 50 монет.
+    Если видео ещё не в liked_videos - добавляет туда и увеличивает likes, total, value на 1.
+    Если видео уже в liked_videos - только добавляет в saved_videos (value не увеличивается повторно).
     Возвращает True при успехе, False при недостатке монет или ошибке.
     """
     conn = get_connection()
@@ -1764,26 +1765,44 @@ def video_save(user_id, video_id):
         return False
     try:
         with conn.cursor() as cur:
-            # Проверяем баланс и списываем 50 монет, добавляем в saved_videos и liked_videos
-            cur.execute("""
-                UPDATE users
-                SET saved_videos = array_append(coalesce(saved_videos, ARRAY[]::INTEGER[]), %s),
-                    liked_videos = array_append(coalesce(liked_videos, ARRAY[]::INTEGER[]), %s),
-                    coins = coins - 50
-                WHERE id = %s AND coins >= 50
-                RETURNING coins
-            """, (video_id, video_id, user_id))
+            # Проверяем, есть ли уже видео в liked_videos
+            cur.execute("SELECT liked_videos FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            liked_videos = row['liked_videos'] if row and row['liked_videos'] else []
+            already_liked = video_id in liked_videos
+            
+            # Проверяем баланс и списываем 50 монет, добавляем в saved_videos
+            # Добавляем в liked_videos только если ещё не лайкнуто
+            if already_liked:
+                cur.execute("""
+                    UPDATE users
+                    SET saved_videos = array_append(coalesce(saved_videos, ARRAY[]::INTEGER[]), %s),
+                        coins = coins - 50
+                    WHERE id = %s AND coins >= 50
+                    RETURNING coins
+                """, (video_id, user_id))
+            else:
+                cur.execute("""
+                    UPDATE users
+                    SET saved_videos = array_append(coalesce(saved_videos, ARRAY[]::INTEGER[]), %s),
+                        liked_videos = array_append(coalesce(liked_videos, ARRAY[]::INTEGER[]), %s),
+                        coins = coins - 50
+                    WHERE id = %s AND coins >= 50
+                    RETURNING coins
+                """, (video_id, video_id, user_id))
+            
             if cur.rowcount == 0:
                 return False
             
-            # Увеличиваем likes, total, value видео
-            cur.execute("""
-                UPDATE videos
-                SET likes = likes + 1,
-                    total = total + 1,
-                    value = value + 1
-                WHERE id = %s
-            """, (video_id,))
+            # Увеличиваем likes, total, value только если видео ещё не было лайкнуто
+            if not already_liked:
+                cur.execute("""
+                    UPDATE videos
+                    SET likes = likes + 1,
+                        total = total + 1,
+                        value = value + 1
+                    WHERE id = %s
+                """, (video_id,))
             
             conn.commit()
             return True

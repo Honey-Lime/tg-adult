@@ -525,23 +525,66 @@
       }
 
       function toggleFullscreen() {
-        if (!tg.requestFullscreen || !tg.exitFullscreen) {
-          alert(
-            "Полноэкранный режим не поддерживается в вашей версии Telegram",
-          );
+        // Пробуем Telegram WebApp API
+        if (tg.requestFullscreen && tg.exitFullscreen) {
+          if (fullscreenActive) {
+            tg.exitFullscreen();
+          } else {
+            tg.requestFullscreen();
+          }
           return;
         }
-        if (fullscreenActive) {
-          tg.exitFullscreen();
+
+        // Фоллбэк на браузерный Fullscreen API
+        const elem = document.documentElement;
+        if (!fullscreenActive) {
+          if (elem.requestFullscreen) {
+            elem.requestFullscreen();
+          } else if (elem.webkitRequestFullscreen) {
+            elem.webkitRequestFullscreen();
+          } else if (elem.msRequestFullscreen) {
+            elem.msRequestFullscreen();
+          } else {
+            tg.showAlert(
+              "Полноэкранный режим не поддерживается вашим браузером",
+            );
+          }
         } else {
-          tg.requestFullscreen();
+          if (document.exitFullscreen) {
+            document.exitFullscreen();
+          } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+          } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+          }
         }
       }
 
       fullscreenBtn.addEventListener("click", toggleFullscreen);
 
-      tg.onEvent("fullscreenChanged", () => {
-        fullscreenActive = tg.isFullscreen;
+      // Слушаем изменения fullscreen через Telegram API
+      if (tg.onEvent) {
+        tg.onEvent("fullscreenChanged", () => {
+          fullscreenActive = tg.isFullscreen;
+          updateFullscreenButton();
+        });
+      }
+
+      // Слушаем изменения fullscreen через браузерный API
+      document.addEventListener("fullscreenchange", () => {
+        fullscreenActive = document.fullscreenElement !== null;
+        updateFullscreenButton();
+      });
+      document.addEventListener("webkitfullscreenchange", () => {
+        fullscreenActive = document.webkitFullscreenElement !== null;
+        updateFullscreenButton();
+      });
+      document.addEventListener("mozfullscreenchange", () => {
+        fullscreenActive = document.mozFullScreenElement !== null;
+        updateFullscreenButton();
+      });
+      document.addEventListener("MSFullscreenChange", () => {
+        fullscreenActive = document.msFullscreenElement !== null;
         updateFullscreenButton();
       });
 
