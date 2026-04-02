@@ -186,8 +186,18 @@
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-      const tg = window.Telegram.WebApp;
-      tg.expand();
+      const tg = window.Telegram?.WebApp || {
+        expand: () => {},
+        isVersionAtLeast: () => false,
+        onEvent: () => {},
+        exitFullscreen: () => {},
+        requestFullscreen: () => {},
+        isFullscreen: false,
+        showAlert: (msg) => alert(msg),
+      };
+      if (window.Telegram?.WebApp) {
+        tg.expand();
+      }
 
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get("user_id");
