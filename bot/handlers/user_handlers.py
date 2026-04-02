@@ -2,9 +2,28 @@
 Обработчики действий пользователя: лайки, дизлайки, сохранения изображений.
 """
 
+import aiohttp
 import database
 from keyboards import get_save_button_keyboard
 from locales import get_text
+
+# URL miniapp API для очистки кэша
+MINIAPP_API_URL = "http://localhost:8000"
+
+async def clear_miniapp_cache(user_id: int):
+    """Очищает кэш miniapp для пользователя после сохранения изображения."""
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{MINIAPP_API_URL}/api/clear_cache", params={"user_id": user_id}) as response:
+                if response.status == 200:
+                    import logging
+                    logging.info(f"Cleared miniapp cache for user_id={user_id}")
+                else:
+                    import logging
+                    logging.warning(f"Failed to clear miniapp cache: {response.status}")
+    except Exception as e:
+        import logging
+        logging.error(f"Error clearing miniapp cache: {e}")
 
 
 async def handle_like(controller, chat_id: int, message_id: int, lang: str):
@@ -90,6 +109,9 @@ async def handle_save_from_history(controller, callback_data: str, chat_id: int,
     logging.info(f"[SAVE_FROM_HISTORY] database.save result: success={success}")
     
     if success:
+        # Очищаем кэш miniapp
+        await clear_miniapp_cache(chat_id)
+        
         logging.info(f"[SAVE_FROM_HISTORY] Removing keyboard from message_id={message_id}")
         await controller.remove_keyboard(chat_id, message_id)
         await controller.send_and_track(
@@ -141,6 +163,9 @@ async def handle_save_current(controller, chat_id: int, message_id: int, lang: s
     success = database.save(chat_id, image_id)
     
     if success:
+        # Очищаем кэш miniapp
+        await clear_miniapp_cache(chat_id)
+        
         await controller.remove_keyboard(chat_id, message_id)
         await controller.send_and_track(
             chat_id,

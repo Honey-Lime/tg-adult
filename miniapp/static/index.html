@@ -213,10 +213,6 @@
       let savedFilter = "photo"; // "all" | "photo" | "video"
 
       async function loadImages(endpoint) {
-        // Сбрасываем очередь загрузки при новой загрузке
-        pendingMediaQueue = [];
-        isMediaLoading = false;
-
         gallery.innerHTML = '<div class="loading">Загрузка...</div>';
         try {
           const response = await fetch(endpoint);
@@ -228,19 +224,14 @@
         }
       }
 
-      // Хранилище данных для загрузки медиа
-      let pendingMediaQueue = [];
-      let isMediaLoading = false;
-
       function renderGallery(images) {
         if (images.length === 0) {
           gallery.innerHTML = '<div class="loading">Нет элементов</div>';
           return;
         }
 
-        // Сначала рендерим карточки без медиа (только заглушки)
-        const placeholderHtml = images
-          .map((img, index) => {
+        const html = images
+          .map((img) => {
             const isVideo =
               img.media_type === "video" ||
               img.path.endsWith(".mp4") ||
@@ -250,12 +241,17 @@
               : img.type === 0
                 ? "Аниме"
                 : "Фото";
+            const mediaUrl = isVideo
+              ? `/videos/${img.path}`
+              : `/images/${img.type === 0 ? "anime" : "real"}/${img.path}`;
 
             return `
-              <div class="card ${isVideo ? "video-card" : ""}" data-media-loaded="false" data-index="${index}">
-                <div class="media-placeholder" style="width: 100%; height: 300px; background: var(--tg-theme-secondary-bg-color, #f0f0f0); display: flex; align-items: center; justify-content: center;">
-                  <div class="loading-spinner">⏳</div>
-                </div>
+              <div class="card ${isVideo ? "video-card" : ""}">
+                ${
+                  isVideo
+                    ? `<video src="${mediaUrl}" style="width: 100%; height: 300px; object-fit: cover;" preload="auto" controlsList="nodownload"></video>`
+                    : `<img src="${mediaUrl}" alt="Image ${img.id}" style="width: 100%; height: 300px; object-fit: cover; display: block;" />`
+                }
                 <div class="info">
                   <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
                   <div class="value">⭐ ${img.value}</div>
@@ -265,135 +261,33 @@
             `;
           })
           .join("");
-        gallery.innerHTML = placeholderHtml;
+        gallery.innerHTML = html;
 
-        // Сохраняем данные для последовательной загрузки
-        pendingMediaQueue = images.map((img, index) => ({ index, img }));
-
-        // Запускаем последовательную загрузку сверху вниз
-        loadMediaSequentially();
-      }
-
-      async function loadMediaSequentially() {
-        if (isMediaLoading || pendingMediaQueue.length === 0) return;
-
-        isMediaLoading = true;
-        const total = pendingMediaQueue.length;
-
-        let loaded = 0;
-        for (const item of pendingMediaQueue) {
-          await loadMediaForCard(item.index, item.img);
-          loaded++;
-          // Небольшая задержка между загрузками для плавности
-          await new Promise((resolve) => setTimeout(resolve, 50));
-        }
-
-        isMediaLoading = false;
-      }
-
-      function loadMediaForCard(index, img) {
-        return new Promise((resolve) => {
+        // Добавляем обработчики кликов
+        const cards = gallery.querySelectorAll(".card");
+        cards.forEach((card, idx) => {
+          const img = images[idx];
           const isVideo =
             img.media_type === "video" ||
             img.path.endsWith(".mp4") ||
             img.path.endsWith(".mov");
-          const mediaUrl = isVideo
-            ? `/videos/${img.path}`
-            : `/images/${img.type === 0 ? "anime" : "real"}/${img.path}`;
-          const thumbnailUrl = isVideo
-            ? `/api/video_thumbnail?video_path=${encodeURIComponent(img.path)}`
-            : null;
           const typeText = isVideo
             ? "🎬 Видео"
             : img.type === 0
               ? "Аниме"
               : "Фото";
 
-          const card = gallery.querySelector(`.card[data-index="${index}"]`);
-          if (!card || card.dataset.mediaLoaded === "true") {
-            resolve();
-            return;
-          }
-
-          const placeholder = card.querySelector(".media-placeholder");
-
-          // Таймаут на случай если загрузка зависнет
-          const timeout = setTimeout(() => {
-            if (card.dataset.mediaLoaded !== "true") {
-              placeholder.innerHTML = "<div>⏱️</div>";
-              card.dataset.mediaLoaded = "true";
-              resolve();
-            }
-          }, 10000); // 10 секунд таймаут
-
-          if (isVideo) {
-            const video = document.createElement("video");
-            video.src = mediaUrl;
-            video.poster = thumbnailUrl;
-            video.alt = "Video " + img.id;
-            video.style.cssText =
-              "width: 100%; height: 300px; object-fit: cover;";
-            video.preload = "metadata";
-
-            video.onloadedmetadata = () => {
-              clearTimeout(timeout);
-              placeholder.innerHTML = "";
-              placeholder.appendChild(video);
-              card.dataset.mediaLoaded = "true";
-              card.onclick = () =>
-                handleCardClick(
-                  card,
-                  img.path,
-                  typeText,
-                  img.id,
-                  img.likes,
-                  img.dislikes,
-                  img.value,
-                  img.media_type || "video",
-                );
-              resolve();
-            };
-
-            video.onerror = () => {
-              clearTimeout(timeout);
-              placeholder.innerHTML = "<div>⚠️</div>";
-              card.dataset.mediaLoaded = "true";
-              resolve();
-            };
-          } else {
-            const image = document.createElement("img");
-            image.src = mediaUrl;
-            image.alt = "Image " + img.id;
-            image.style.cssText =
-              "width: 100%; height: 300px; object-fit: cover; display: block;";
-            image.loading = "lazy";
-
-            image.onload = () => {
-              clearTimeout(timeout);
-              placeholder.innerHTML = "";
-              placeholder.appendChild(image);
-              card.dataset.mediaLoaded = "true";
-              card.onclick = () =>
-                handleCardClick(
-                  card,
-                  img.path,
-                  typeText,
-                  img.id,
-                  img.likes,
-                  img.dislikes,
-                  img.value,
-                  img.media_type || "photo",
-                );
-              resolve();
-            };
-
-            image.onerror = () => {
-              clearTimeout(timeout);
-              placeholder.innerHTML = "<div>⚠️</div>";
-              card.dataset.mediaLoaded = "true";
-              resolve();
-            };
-          }
+          card.onclick = () =>
+            handleCardClick(
+              card,
+              img.path,
+              typeText,
+              img.id,
+              img.likes,
+              img.dislikes,
+              img.value,
+              img.media_type || (isVideo ? "video" : "photo"),
+            );
         });
       }
 

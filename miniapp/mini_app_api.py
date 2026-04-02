@@ -90,7 +90,7 @@ def clear_saved_cache(user_id: int):
     """Очищает кэш для конкретного пользователя."""
     keys_to_delete = [
         key for key in _cache.keys()
-        if key[0] == 'get_saved' and user_id in (key[1] or ())
+        if key[0] == 'get_saved' and len(key[1]) > 0 and key[1][0] == user_id
     ]
     for key in keys_to_delete:
         del _cache[key]
@@ -177,36 +177,64 @@ async def get_saved(user_id: int, sort: str = "newest", order: str = "desc", fil
 			
 			# Получаем фото
 			if filter in ["all", "photo"] and saved_images_ids:
-				query = f"""
-					SELECT id, path, likes, dislikes, value, type, 'photo' as media_type
-					FROM pictures
-					WHERE id = ANY(%s)
-					ORDER BY {order_field} {order_direction}
-				"""
-				cur.execute(query, (saved_images_ids,))
-				results.extend(cur.fetchall())
+				if sort == "newest":
+					# При сортировке по новизне используем порядок в массиве saved_images
+					# Последние добавленные (в конце массива) должны быть первыми
+					photo_results = []
+					for img_id in reversed(saved_images_ids):
+						cur.execute("""
+							SELECT id, path, likes, dislikes, value, type, 'photo' as media_type
+							FROM pictures
+							WHERE id = %s
+						""", (img_id,))
+						row = cur.fetchone()
+						if row:
+							photo_results.append(row)
+					results.extend(photo_results)
+				else:
+					query = f"""
+						SELECT id, path, likes, dislikes, value, type, 'photo' as media_type
+						FROM pictures
+						WHERE id = ANY(%s)
+						ORDER BY {order_field} {order_direction}
+					"""
+					cur.execute(query, (saved_images_ids,))
+					results.extend(cur.fetchall())
 			
 			# Получаем видео
 			if filter in ["all", "video"] and saved_videos_ids:
-				query = f"""
-					SELECT id, path, likes, dislikes, value, 'video' as media_type
-					FROM videos
-					WHERE id = ANY(%s)
-					ORDER BY {order_field} {order_direction}
-				"""
-				cur.execute(query, (saved_videos_ids,))
-				videos = cur.fetchall()
-				
-				# Если сортировка по новизне и фильтр "all", объединяем и сортируем по id
-				if filter == "all" and sort == "newest":
-					results.extend(videos)
-					# Сортируем объединенные результаты по id
-					if order_direction == "DESC":
-						results.sort(key=lambda x: x['id'], reverse=True)
+				if sort == "newest":
+					# При сортировке по новизне используем порядок в массиве saved_videos
+					# Последние добавленные (в конце массива) должны быть первыми
+					video_results = []
+					for vid_id in reversed(saved_videos_ids):
+						cur.execute("""
+							SELECT id, path, likes, dislikes, value, 'video' as media_type
+							FROM videos
+							WHERE id = %s
+						""", (vid_id,))
+						row = cur.fetchone()
+						if row:
+							video_results.append(row)
+					# Если фильтр "all", объединяем с фото в порядке добавления
+					if filter == "all":
+						# results уже содержит фото в порядке "последние добавленные первыми"
+						# video_results содержит видео в порядке "последние добавленные первыми"
+						# Нужно объединить их в общий порядок по времени добавления
+						# Но мы не знаем точный порядок между фото и видео
+						# Простое решение: просто объединяем, фото идут первыми, затем видео
+						results.extend(video_results)
 					else:
-						results.sort(key=lambda x: x['id'])
+						results.extend(video_results)
 				else:
-					results.extend(videos)
+					query = f"""
+						SELECT id, path, likes, dislikes, value, 'video' as media_type
+						FROM videos
+						WHERE id = ANY(%s)
+						ORDER BY {order_field} {order_direction}
+					"""
+					cur.execute(query, (saved_videos_ids,))
+					results.extend(cur.fetchall())
 			
 			logger.info(f"Found {len(results)} saved items with sort={sort}, order={order}, filter={filter}")
 			return results
@@ -269,6 +297,16 @@ async def save_video(user_id: int, video_id: int):
 	except Exception as e:
 		logger.error(f"Error in save_video: {e}")
 		raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/clear_cache")
+async def clear_cache(user_id: int):
+	"""
+	Очищает кэш сохранённых изображений для пользователя.
+	Вызывается из бота после сохранения изображения.
+	"""
+	logger.info(f"clear_cache called with user_id={user_id}")
+	clear_saved_cache(user_id)
+	return {"status": "success"}
 
 @app.get("/app")
 async def serve_app():
