@@ -242,7 +242,7 @@ class BotController:
 		language_code = user.language_code
 		database.update_user_profile(chat_id, first_name, last_name, username, language_code)
 
-	async def edit_message_to_save_button(self, chat_id: int, message_id: int, image_id: int) -> None:
+	async def edit_message_to_save_button(self, chat_id: int, message_id: int, image_id: int, lang: str) -> None:
 		keyboard = keyboards.get_save_button_keyboard(image_id, lang)
 		try:
 			await self.bot.edit_message_reply_markup(

@@ -21,7 +21,7 @@ async def handle_like(controller, chat_id: int, message_id: int, lang: str):
     
     if user and user.get('last_watched'):
         image_id = user['last_watched']
-        await controller.edit_message_to_save_button(chat_id, message_id, image_id)
+        await controller.edit_message_to_save_button(chat_id, message_id, image_id, lang)
     else:
         await controller.delete_current(chat_id, message_id)
     
@@ -43,7 +43,7 @@ async def handle_dislike(controller, chat_id: int, message_id: int, lang: str):
     
     if user and user.get('last_watched'):
         image_id = user['last_watched']
-        await controller.edit_message_to_save_button(chat_id, message_id, image_id)
+        await controller.edit_message_to_save_button(chat_id, message_id, image_id, lang)
     else:
         await controller.delete_current(chat_id, message_id)
     
