@@ -118,9 +118,6 @@ class BotController:
 
 
 	def _register_handlers(self) -> None:
-		# Отладочный обработчик - логирует ВСЕ сообщения
-		self.router.message.register(self._debug_log_all_messages)
-		
 		self.router.message.register(self.cmd_start, Command("start"))
 		self.router.message.register(self.cmd_app, Command("app"))
 		self.router.message.register(self.cmd_donut, Command("donut"))
@@ -129,12 +126,6 @@ class BotController:
 		self.router.pre_checkout_query.register(self.handle_pre_checkout_query)
 		self.router.message.register(self.handle_successful_payment, F.successful_payment)
 		self.router.callback_query.register(self.process_callback)
-	
-	async def _debug_log_all_messages(self, message: Message) -> None:
-		"""Отладочный обработчик - логирует все сообщения"""
-		logging.info(f"=== DEBUG MESSAGE === chat_id={message.chat.id}, content_type={message.content_type}, has_successful_payment={message.successful_payment is not None}")
-		if message.successful_payment:
-			logging.info(f"=== SUCCESSFUL PAYMENT DETAILS === currency={message.successful_payment.currency}, total_amount={message.successful_payment.total_amount}, payload={message.successful_payment.invoice_payload}")
 
 
 	# ==================== ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ====================
