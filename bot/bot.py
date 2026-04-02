@@ -244,6 +244,8 @@ class BotController:
 
 	async def edit_message_to_save_button(self, chat_id: int, message_id: int, image_id: int, lang: str) -> None:
 		keyboard = keyboards.get_save_button_keyboard(image_id, lang)
+		logging.info(f"[EDIT_TO_SAVE] chat_id={chat_id}, message_id={message_id}, image_id={image_id}")
+		logging.info(f"[EDIT_TO_SAVE] Before edit: last_image_message_id={self.last_image_message_id.get(chat_id)}")
 		try:
 			await self.bot.edit_message_reply_markup(
 				chat_id=chat_id,
@@ -251,7 +253,7 @@ class BotController:
 				reply_markup=keyboard,
 				business_connection_id=None,
 			)
-			logging.info(f"Сообщение {message_id} отредактировано, добавлена кнопка save_{image_id}")
+			logging.info(f"[EDIT_TO_SAVE] Success: edited message {message_id}, added button save_{image_id}")
 		except Exception as e:
 			logging.error(f"Не удалось отредактировать сообщение {message_id}: {type(e).__name__}: {e}")
 
@@ -268,6 +270,10 @@ class BotController:
 
 	async def remove_keyboard(self, chat_id: int, message_id: int) -> None:
 		"""Убирает клавиатуру с сообщения (оставляет только контент)."""
+		logging.info(f"[REMOVE_KEYBOARD] chat_id={chat_id}, message_id={message_id}")
+		if message_id is None:
+			logging.warning("[REMOVE_KEYBOARD] message_id is None, skipping")
+			return
 		try:
 			await self.bot.edit_message_reply_markup(
 				chat_id=chat_id,
@@ -275,6 +281,7 @@ class BotController:
 				reply_markup=None,
 				business_connection_id=None
 			)
+			logging.info(f"[REMOVE_KEYBOARD] Success: removed keyboard from message {message_id}")
 		except Exception as e:
 			logging.error(f"Не удалось убрать клавиатуру с сообщения {message_id}: {e}")
 
@@ -953,6 +960,7 @@ class BotController:
 
 		try:
 			lang = self.get_user_lang(chat_id)
+			logging.info(f"[SEND_PICTURE] chat_id={chat_id}, before: last_image_message_id={self.last_image_message_id.get(chat_id)}")
 			# +++ Rate limit: не чаще 1 раза в секунду +++
 			now = asyncio.get_event_loop().time()
 			last_time = self.last_picture_time.get(chat_id, 0)
@@ -994,6 +1002,7 @@ class BotController:
 
 			self.last_image_message_id[chat_id] = sent.message_id
 			self.last_picture_time[chat_id] = now
+			logging.info(f"[SEND_PICTURE] chat_id={chat_id}, after: last_image_message_id={sent.message_id}")
 
 		finally:
 			self.sending_picture[chat_id] = False

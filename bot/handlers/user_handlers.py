@@ -17,16 +17,23 @@ async def handle_like(controller, chat_id: int, message_id: int, lang: str):
         message_id: ID сообщения для редактирования
         lang: Язык пользователя
     """
+    import logging
     user = database.get_user(chat_id)
+    
+    logging.info(f"[HANDLE_LIKE] chat_id={chat_id}, message_id={message_id}, last_watched={user.get('last_watched') if user else None}")
+    logging.info(f"[HANDLE_LIKE] Before edit: last_image_message_id={controller.last_image_message_id.get(chat_id)}")
     
     if user and user.get('last_watched'):
         image_id = user['last_watched']
         await controller.edit_message_to_save_button(chat_id, message_id, image_id, lang)
+        logging.info(f"[HANDLE_LIKE] Edited message {message_id} to add save button for image {image_id}")
     else:
         await controller.delete_current(chat_id, message_id)
+        logging.info(f"[HANDLE_LIKE] Deleted message {message_id}")
     
     database.like(chat_id)
     await controller.send_picture(chat_id)
+    logging.info(f"[HANDLE_LIKE] After send_picture: last_image_message_id={controller.last_image_message_id.get(chat_id)}")
 
 
 async def handle_dislike(controller, chat_id: int, message_id: int, lang: str):
@@ -39,16 +46,23 @@ async def handle_dislike(controller, chat_id: int, message_id: int, lang: str):
         message_id: ID сообщения для редактирования
         lang: Язык пользователя
     """
+    import logging
     user = database.get_user(chat_id)
+    
+    logging.info(f"[HANDLE_DISLIKE] chat_id={chat_id}, message_id={message_id}, last_watched={user.get('last_watched') if user else None}")
+    logging.info(f"[HANDLE_DISLIKE] Before edit: last_image_message_id={controller.last_image_message_id.get(chat_id)}")
     
     if user and user.get('last_watched'):
         image_id = user['last_watched']
         await controller.edit_message_to_save_button(chat_id, message_id, image_id, lang)
+        logging.info(f"[HANDLE_DISLIKE] Edited message {message_id} to add save button for image {image_id}")
     else:
         await controller.delete_current(chat_id, message_id)
+        logging.info(f"[HANDLE_DISLIKE] Deleted message {message_id}")
     
     database.dislike(chat_id)
     await controller.send_picture(chat_id)
+    logging.info(f"[HANDLE_DISLIKE] After send_picture: last_image_message_id={controller.last_image_message_id.get(chat_id)}")
 
 
 async def handle_save_from_history(controller, callback_data: str, chat_id: int, lang: str):
@@ -61,16 +75,27 @@ async def handle_save_from_history(controller, callback_data: str, chat_id: int,
         chat_id: ID чата пользователя
         lang: Язык пользователя
     """
+    import logging
     try:
         image_id = int(callback_data.split('_')[1])
     except (IndexError, ValueError):
         await controller.send_and_track(chat_id, text=get_text(lang, 'callback_error'), track=False)
         return
     
+    # Получаем message_id из callback сообщения
+    callback_message_id = None
+    # LOG: Отладка проблемы с message_id
+    logging.info(f"[SAVE_FROM_HISTORY] chat_id={chat_id}, image_id={image_id}, callback_data={callback_data}")
+    logging.info(f"[SAVE_FROM_HISTORY] controller.last_image_message_id={controller.last_image_message_id.get(chat_id)}")
+    
     success = database.save(chat_id, image_id)
     
+    logging.info(f"[SAVE_FROM_HISTORY] database.save result: success={success}")
+    
     if success:
-        await controller.remove_keyboard(chat_id, controller.last_image_message_id.get(chat_id))
+        target_message_id = controller.last_image_message_id.get(chat_id)
+        logging.info(f"[SAVE_FROM_HISTORY] Removing keyboard from message_id={target_message_id}")
+        await controller.remove_keyboard(chat_id, target_message_id)
         await controller.send_and_track(
             chat_id,
             text=get_text(lang, 'saved_message'),
