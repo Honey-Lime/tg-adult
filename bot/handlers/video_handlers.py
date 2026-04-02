@@ -110,7 +110,6 @@ async def handle_video_like(controller, chat_id: int, message_id: int, lang: str
     
     if success:
         await controller.remove_keyboard(chat_id, message_id)
-        await controller.send_and_track(chat_id, text=get_text(lang, 'coins_added'), track=False)
         
         # Возврат в меню выбора видео
         user = database.get_user(chat_id)
@@ -146,7 +145,6 @@ async def handle_video_dislike(controller, chat_id: int, message_id: int, lang: 
     
     if success:
         await controller.remove_keyboard(chat_id, message_id)
-        await controller.send_and_track(chat_id, text=get_text(lang, 'coins_added'), track=False)
         
         # Возврат в меню выбора видео
         user = database.get_user(chat_id)
@@ -214,10 +212,15 @@ async def handle_video_save(controller, chat_id: int, message_id: int, lang: str
     
     if success:
         await controller.remove_keyboard(chat_id, message_id)
+        
+        # Возврат в меню выбора видео
+        user = database.get_user(chat_id)
+        coins = user.get('coins', 0) if user else 0
+        keyboard = get_video_menu_keyboard(lang)
         await controller.send_and_track(
             chat_id,
-            text="✅ Видео сохранено! 🪙-50",
-            track=False,
+            text=f"Баланс: {coins}🪙\nВыберите видео:",
+            reply_markup=keyboard,
         )
     else:
         await controller.send_and_track(
