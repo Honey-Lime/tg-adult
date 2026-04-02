@@ -175,6 +175,10 @@
       <button id="sortByRatingBtn">⭐ По оценкам</button>
       <button id="sortByNewestBtn">🕐 По новизне</button>
     </div>
+    <div class="menu" id="filterButtons" style="display: none">
+      <button id="filterPhotoBtn">📷 Фото</button>
+      <button id="filterVideoBtn">Видео</button>
+    </div>
     <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
     <div id="gallery" class="gallery">
       <div class="loading">Загрузка...</div>
@@ -193,10 +197,13 @@
       const topRealBtn = document.getElementById("topRealBtn");
       const savedBtn = document.getElementById("savedBtn");
       const videosBtn = document.getElementById("videosBtn");
+      const filterPhotoBtn = document.getElementById("filterPhotoBtn");
+      const filterVideoBtn = document.getElementById("filterVideoBtn");
 
       // Состояние сортировки для сохраненных
       let savedSortBy = "newest"; // "rating" | "newest"
       let savedSortOrder = "desc"; // "asc" | "desc"
+      let savedFilter = "all"; // "all" | "photo" | "video"
 
       async function loadImages(endpoint) {
         gallery.innerHTML = '<div class="loading">Загрузка...</div>';
@@ -217,10 +224,11 @@
         }
         const html = images
           .map((img) => {
-            // Проверяем, видео ли это (для видео в API возвращаем type=0, но у видео есть поле id из таблицы videos)
-            // Для простоты используем наличие поля path и его формат - видео имеют путь к .mp4 файлам
+            // Определяем тип медиа из поля media_type или по расширению файла
             const isVideo =
-              img.path.endsWith(".mp4") || img.path.endsWith(".mov");
+              img.media_type === "video" ||
+              img.path.endsWith(".mp4") ||
+              img.path.endsWith(".mov");
             const typeText = isVideo
               ? "🎬 Видео"
               : img.type === 0
@@ -233,7 +241,7 @@
             if (isVideo) {
               return `
                 <div class="card video-card" onclick="openVideoModal('${mediaUrl}', '${typeText}')">
-                  <video src="${mediaUrl}" alt="Video ${img.id}" loading="lazy" style="width: 100%; height: 300px; object-fit: cover;"></video>
+                  <video src="${mediaUrl}" poster="${mediaUrl}#t=0.1" alt="Video ${img.id}" loading="lazy" style="width: 100%; height: 300px; object-fit: cover;" preload="metadata"></video>
                   <div class="info">
                     <div>❤️ ${img.likes} | 💔 ${img.dislikes}</div>
                     <div class="value">⭐ ${img.value}</div>
@@ -260,11 +268,13 @@
 
       topAnimeBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
+        document.getElementById("filterButtons").style.display = "none";
         loadImages("/api/top?type=0");
       });
 
       topRealBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
+        document.getElementById("filterButtons").style.display = "none";
         loadImages("/api/top?type=1");
       });
 
@@ -274,12 +284,12 @@
             '<div class="loading">Ошибка: не удалось определить пользователя</div>';
           return;
         }
-        // Показываем кнопки сортировки
+        // Показываем кнопки сортировки и фильтрации
         document.getElementById("sortButtons").style.display = "flex";
+        document.getElementById("filterButtons").style.display = "flex";
         updateSortButtons();
-        loadImages(
-          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
-        );
+        updateFilterButtons();
+        loadSaved();
       });
 
       videosBtn.addEventListener("click", () => {
@@ -289,6 +299,7 @@
           return;
         }
         document.getElementById("sortButtons").style.display = "none";
+        document.getElementById("filterButtons").style.display = "none";
         loadImages(`/api/liked_videos?user_id=${userId}`);
       });
 
@@ -331,6 +342,42 @@
         sortByNewestBtn.textContent = "🕐 По новизне" + newestArrow;
       }
 
+      function updateFilterButtons() {
+        // Сбрасываем стили
+        filterPhotoBtn.style.background =
+          "var(--tg-theme-button-color, #2481cc)";
+        filterVideoBtn.style.background =
+          "var(--tg-theme-button-color, #2481cc)";
+
+        // Подсвечиваем активную кнопку
+        if (savedFilter === "photo") {
+          filterPhotoBtn.style.background =
+            "var(--tg-theme-button-text-color, #fff)";
+          filterPhotoBtn.style.color = "var(--tg-theme-button-color, #2481cc)";
+        } else if (savedFilter === "video") {
+          filterVideoBtn.style.background =
+            "var(--tg-theme-button-text-color, #fff)";
+          filterVideoBtn.style.color = "var(--tg-theme-button-color, #2481cc)";
+        }
+      }
+
+      async function loadSaved() {
+        const endpoint = `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}&filter=${savedFilter}`;
+        loadImages(endpoint);
+      }
+
+      filterPhotoBtn.addEventListener("click", () => {
+        savedFilter = "photo";
+        updateFilterButtons();
+        loadSaved();
+      });
+
+      filterVideoBtn.addEventListener("click", () => {
+        savedFilter = "video";
+        updateFilterButtons();
+        loadSaved();
+      });
+
       sortByRatingBtn.addEventListener("click", () => {
         if (savedSortBy === "rating") {
           savedSortOrder = savedSortOrder === "desc" ? "asc" : "desc";
@@ -339,9 +386,7 @@
           savedSortOrder = "desc";
         }
         updateSortButtons();
-        loadImages(
-          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
-        );
+        loadSaved();
       });
 
       sortByNewestBtn.addEventListener("click", () => {
@@ -352,9 +397,7 @@
           savedSortOrder = "desc";
         }
         updateSortButtons();
-        loadImages(
-          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
-        );
+        loadSaved();
       });
 
       // Загружаем топ аниме по умолчанию

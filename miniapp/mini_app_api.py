@@ -100,24 +100,27 @@ async def get_top(image_type: int = Query(..., alias="type")):
 
 @app.get("/api/saved")
 @cached_with_ttl(ttl=10)
-async def get_saved(user_id: int, sort: str = "newest", order: str = "desc"):
+async def get_saved(user_id: int, sort: str = "newest", order: str = "desc", filter: str = "all"):
 	"""
-	Возвращает сохранённые изображения пользователя.
-	Параметры сортировки:
+	Возвращает сохранённые изображения и видео пользователя.
+	Параметры:
 	- sort: "rating" (по оценкам) или "newest" (по новизне, по умолчанию)
 	- order: "asc" (возрастание) или "desc" (убывание, по умолчанию)
+	- filter: "all" (все), "photo" (только фото), "video" (только видео)
 	"""
-	logger.info(f"get_saved called with user_id={user_id}, sort={sort}, order={order}")
+	logger.info(f"get_saved called with user_id={user_id}, sort={sort}, order={order}, filter={filter}")
 	conn = get_db_connection()
 	try:
 		with conn.cursor() as cur:
 			# Получаем сохранённые ID пользователя
-			cur.execute("SELECT saved_images FROM users WHERE id = %s", (user_id,))
+			cur.execute("SELECT saved_images, saved_videos FROM users WHERE id = %s", (user_id,))
 			row = cur.fetchone()
-			if not row or not row['saved_images']:
-				logger.info("No saved images")
+			if not row:
+				logger.info("User not found")
 				return []
-			saved_ids = row['saved_images']
+			
+			saved_images_ids = row['saved_images'] or []
+			saved_videos_ids = row['saved_videos'] or []
 			
 			# Определяем порядок сортировки
 			order_direction = "ASC" if order == "asc" else "DESC"
@@ -128,17 +131,43 @@ async def get_saved(user_id: int, sort: str = "newest", order: str = "desc"):
 			else:  # newest по умолчанию
 				order_field = "id"
 			
-			# Запрашиваем картинки с динамической сортировкой
-			query = f"""
-				SELECT id, path, likes, dislikes, value, type
-				FROM pictures
-				WHERE id = ANY(%s)
-				ORDER BY {order_field} {order_direction}
-			"""
-			cur.execute(query, (saved_ids,))
-			images = cur.fetchall()
-			logger.info(f"Found {len(images)} saved images with sort={sort}, order={order}")
-			return images
+			results = []
+			
+			# Получаем фото
+			if filter in ["all", "photo"] and saved_images_ids:
+				query = f"""
+					SELECT id, path, likes, dislikes, value, type, 'photo' as media_type
+					FROM pictures
+					WHERE id = ANY(%s)
+					ORDER BY {order_field} {order_direction}
+				"""
+				cur.execute(query, (saved_images_ids,))
+				results.extend(cur.fetchall())
+			
+			# Получаем видео
+			if filter in ["all", "video"] and saved_videos_ids:
+				query = f"""
+					SELECT id, path, likes, dislikes, value, 'video' as media_type
+					FROM videos
+					WHERE id = ANY(%s)
+					ORDER BY {order_field} {order_direction}
+				"""
+				cur.execute(query, (saved_videos_ids,))
+				videos = cur.fetchall()
+				
+				# Если сортировка по новизне и фильтр "all", объединяем и сортируем по id
+				if filter == "all" and sort == "newest":
+					results.extend(videos)
+					# Сортируем объединенные результаты по id
+					if order_direction == "DESC":
+						results.sort(key=lambda x: x['id'], reverse=True)
+					else:
+						results.sort(key=lambda x: x['id'])
+				else:
+					results.extend(videos)
+			
+			logger.info(f"Found {len(results)} saved items with sort={sort}, order={order}, filter={filter}")
+			return results
 	except Exception as e:
 		logger.error(f"Error in get_saved: {e}")
 		raise HTTPException(status_code=500, detail=str(e))
