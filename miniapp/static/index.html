@@ -190,8 +190,8 @@
         expand: () => {},
         isVersionAtLeast: () => false,
         onEvent: () => {},
-        exitFullscreen: () => {},
-        requestFullscreen: () => {},
+        exitFullscreen: null,
+        requestFullscreen: null,
         isFullscreen: false,
         showAlert: (msg) => alert(msg),
       };
@@ -525,37 +525,35 @@
       }
 
       function toggleFullscreen() {
-        // Пробуем Telegram WebApp API
-        if (tg.requestFullscreen && tg.exitFullscreen) {
-          if (fullscreenActive) {
-            tg.exitFullscreen();
-          } else {
-            tg.requestFullscreen();
-          }
-          // Не делаем return - даём браузерному API тоже сработать
-        }
-
-        // Фоллбэк на браузерный Fullscreen API
         const elem = document.documentElement;
+
         if (!fullscreenActive) {
+          // Вход в fullscreen: приоритет браузерному API (работает везде)
           if (elem.requestFullscreen) {
             elem.requestFullscreen();
           } else if (elem.webkitRequestFullscreen) {
             elem.webkitRequestFullscreen();
           } else if (elem.msRequestFullscreen) {
             elem.msRequestFullscreen();
+          } else if (tg.requestFullscreen) {
+            // Фоллбэк на Telegram API
+            tg.requestFullscreen();
           } else {
             tg.showAlert(
               "Полноэкранный режим не поддерживается вашим браузером",
             );
           }
         } else {
+          // Выход из fullscreen: приоритет браузерному API
           if (document.exitFullscreen) {
             document.exitFullscreen();
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
           } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
+          } else if (tg.exitFullscreen) {
+            // Фоллбэк на Telegram API
+            tg.exitFullscreen();
           }
         }
       }
@@ -563,9 +561,9 @@
       fullscreenBtn.addEventListener("click", toggleFullscreen);
 
       // Слушаем изменения fullscreen через Telegram API
-      if (tg.onEvent) {
+      if (tg.onEvent && tg.isVersionAtLeast("6.1")) {
         tg.onEvent("fullscreenChanged", () => {
-          fullscreenActive = tg.isFullscreen;
+          fullscreenActive = !!tg.isFullscreen;
           updateFullscreenButton();
         });
       }
