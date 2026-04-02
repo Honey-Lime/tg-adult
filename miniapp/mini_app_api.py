@@ -100,8 +100,14 @@ async def get_top(image_type: int = Query(..., alias="type")):
 
 @app.get("/api/saved")
 @cached_with_ttl(ttl=10)
-async def get_saved(user_id: int):
-	logger.info(f"get_saved called with user_id={user_id}")
+async def get_saved(user_id: int, sort: str = "newest", order: str = "desc"):
+	"""
+	Возвращает сохранённые изображения пользователя.
+	Параметры сортировки:
+	- sort: "rating" (по оценкам) или "newest" (по новизне, по умолчанию)
+	- order: "asc" (возрастание) или "desc" (убывание, по умолчанию)
+	"""
+	logger.info(f"get_saved called with user_id={user_id}, sort={sort}, order={order}")
 	conn = get_db_connection()
 	try:
 		with conn.cursor() as cur:
@@ -112,15 +118,26 @@ async def get_saved(user_id: int):
 				logger.info("No saved images")
 				return []
 			saved_ids = row['saved_images']
-			# Запрашиваем картинки и сортируем по value
-			cur.execute("""
+			
+			# Определяем порядок сортировки
+			order_direction = "ASC" if order == "asc" else "DESC"
+			
+			# Определяем поле и порядок сортировки
+			if sort == "rating":
+				order_field = "value"
+			else:  # newest по умолчанию
+				order_field = "id"
+			
+			# Запрашиваем картинки с динамической сортировкой
+			query = f"""
 				SELECT id, path, likes, dislikes, value, type
 				FROM pictures
 				WHERE id = ANY(%s)
-				ORDER BY value DESC
-			""", (saved_ids,))
+				ORDER BY {order_field} {order_direction}
+			"""
+			cur.execute(query, (saved_ids,))
 			images = cur.fetchall()
-			logger.info(f"Found {len(images)} saved images")
+			logger.info(f"Found {len(images)} saved images with sort={sort}, order={order}")
 			return images
 	except Exception as e:
 		logger.error(f"Error in get_saved: {e}")

@@ -56,6 +56,10 @@
         color: var(--tg-theme-button-text-color, #fff);
         font-size: 16px;
         cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .menu button:hover {
+        opacity: 0.9;
       }
       .gallery {
         display: grid;
@@ -167,6 +171,10 @@
       <button id="savedBtn">Сохраненные</button>
       <button id="videosBtn">🎬 Видео</button>
     </div>
+    <div class="menu" id="sortButtons" style="display: none">
+      <button id="sortByRatingBtn">⭐ По оценкам</button>
+      <button id="sortByNewestBtn">🕐 По новизне</button>
+    </div>
     <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
     <div id="gallery" class="gallery">
       <div class="loading">Загрузка...</div>
@@ -185,6 +193,10 @@
       const topRealBtn = document.getElementById("topRealBtn");
       const savedBtn = document.getElementById("savedBtn");
       const videosBtn = document.getElementById("videosBtn");
+
+      // Состояние сортировки для сохраненных
+      let savedSortBy = "newest"; // "rating" | "newest"
+      let savedSortOrder = "desc"; // "asc" | "desc"
 
       async function loadImages(endpoint) {
         gallery.innerHTML = '<div class="loading">Загрузка...</div>';
@@ -247,10 +259,12 @@
       }
 
       topAnimeBtn.addEventListener("click", () => {
+        document.getElementById("sortButtons").style.display = "none";
         loadImages("/api/top?type=0");
       });
 
       topRealBtn.addEventListener("click", () => {
+        document.getElementById("sortButtons").style.display = "none";
         loadImages("/api/top?type=1");
       });
 
@@ -260,7 +274,12 @@
             '<div class="loading">Ошибка: не удалось определить пользователя</div>';
           return;
         }
-        loadImages(`/api/saved?user_id=${userId}`);
+        // Показываем кнопки сортировки
+        document.getElementById("sortButtons").style.display = "flex";
+        updateSortButtons();
+        loadImages(
+          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
+        );
       });
 
       videosBtn.addEventListener("click", () => {
@@ -269,7 +288,73 @@
             '<div class="loading">Ошибка: не удалось определить пользователя</div>';
           return;
         }
+        document.getElementById("sortButtons").style.display = "none";
         loadImages(`/api/liked_videos?user_id=${userId}`);
+      });
+
+      // Обработчики кнопок сортировки
+      const sortByRatingBtn = document.getElementById("sortByRatingBtn");
+      const sortByNewestBtn = document.getElementById("sortByNewestBtn");
+
+      function updateSortButtons() {
+        // Сбрасываем стили
+        sortByRatingBtn.style.background =
+          "var(--tg-theme-button-color, #2481cc)";
+        sortByNewestBtn.style.background =
+          "var(--tg-theme-button-color, #2481cc)";
+
+        // Подсвечиваем активную кнопку
+        if (savedSortBy === "rating") {
+          sortByRatingBtn.style.background =
+            "var(--tg-theme-button-text-color, #fff)";
+          sortByRatingBtn.style.color = "var(--tg-theme-button-color, #2481cc)";
+        } else {
+          sortByNewestBtn.style.background =
+            "var(--tg-theme-button-text-color, #fff)";
+          sortByNewestBtn.style.color = "var(--tg-theme-button-color, #2481cc)";
+        }
+
+        // Обновляем текст кнопок
+        const ratingArrow =
+          savedSortBy === "rating"
+            ? savedSortOrder === "desc"
+              ? " ⬇️"
+              : " ⬆️"
+            : "";
+        const newestArrow =
+          savedSortBy === "newest"
+            ? savedSortOrder === "desc"
+              ? " ⬇️"
+              : " ⬆️"
+            : "";
+        sortByRatingBtn.textContent = "⭐ По оценкам" + ratingArrow;
+        sortByNewestBtn.textContent = "🕐 По новизне" + newestArrow;
+      }
+
+      sortByRatingBtn.addEventListener("click", () => {
+        if (savedSortBy === "rating") {
+          savedSortOrder = savedSortOrder === "desc" ? "asc" : "desc";
+        } else {
+          savedSortBy = "rating";
+          savedSortOrder = "desc";
+        }
+        updateSortButtons();
+        loadImages(
+          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
+        );
+      });
+
+      sortByNewestBtn.addEventListener("click", () => {
+        if (savedSortBy === "newest") {
+          savedSortOrder = savedSortOrder === "desc" ? "asc" : "desc";
+        } else {
+          savedSortBy = "newest";
+          savedSortOrder = "desc";
+        }
+        updateSortButtons();
+        loadImages(
+          `/api/saved?user_id=${userId}&sort=${savedSortBy}&order=${savedSortOrder}`,
+        );
       });
 
       // Загружаем топ аниме по умолчанию
