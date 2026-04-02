@@ -537,6 +537,7 @@ class BotController:
 		"""Обработчик successful_payment для зачисления монет после оплаты."""
 		chat_id = message.chat.id
 		lang = self.get_user_lang(chat_id)
+		logging.info(f"=== SUCCESSFUL PAYMENT RECEIVED === user={chat_id}, currency={message.successful_payment.currency}, total_amount={message.successful_payment.total_amount}, payload={message.successful_payment.invoice_payload}")
 		try:
 			# Парсим payload для получения суммы пополнения
 			payload = message.successful_payment.invoice_payload
