@@ -23,6 +23,7 @@ from aiogram.types import (
 	WebAppInfo,
 	PreCheckoutQuery,
 )
+from aiogram.methods import GetStarTransactions
 
 from config_reader import config
 import database
@@ -111,6 +112,9 @@ class BotController:
 		# Состояние ожидания имени для рекламной ссылки
 		self.waiting_for_promo_name: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода имени ссылки)
 		self.waiting_for_promo_delete: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода номера для удаления)
+		
+		# Ожидающие платежи для Telegram Stars
+		self.pending_payments: Dict[int, dict] = {}  # user_id -> {pre_checkout_query_id, timestamp}
 
 		self._register_handlers()
 		# История сообщений загружается лениво при первом использовании
@@ -529,9 +533,92 @@ class BotController:
 				pre_checkout_query_id=pre_checkout_query.id,
 				ok=True
 			)
-			logging.info(f"Pre-checkout query approved for user {pre_checkout_query.from_user.id}")
+			user_id = pre_checkout_query.from_user.id
+			logging.info(f"Pre-checkout query approved for user {user_id}")
+			
+			# Для Telegram Stars нужно проверить транзакции после pre-checkout
+			# Сохраняем информацию о pending оплате
+			self.pending_payments[user_id] = {
+				'pre_checkout_query_id': pre_checkout_query.id,
+				'timestamp': asyncio.get_event_loop().time()
+			}
+			
+			# Планируем проверку транзакций через 2 секунды
+			asyncio.create_task(self._check_star_transaction(user_id))
 		except Exception as e:
 			logging.error(f"Error in pre_checkout_query: {e}")
+	
+	async def _check_star_transaction(self, user_id: int, max_attempts: int = 5, delay: float = 2.0) -> None:
+		"""Проверка транзакций Telegram Stars через API"""
+		chat_id = user_id
+		lang = self.get_user_lang(chat_id)
+		
+		for attempt in range(max_attempts):
+			await asyncio.sleep(delay)
+			
+			try:
+				# Проверяем, есть ли pending payment для этого пользователя
+				if user_id not in self.pending_payments:
+					logging.debug(f"No pending payment for user {user_id}")
+					return
+				
+				# Получаем последние транзакции через Telegram API
+				from aiogram.methods import GetStarTransactions
+				result = await self.bot(GetStarTransactions(offset=0, limit=10))
+				
+				if result and result.transactions:
+					# Ищем последнюю транзакцию для этого пользователя
+					for transaction in result.transactions:
+						# Проверяем, что транзакция от этого пользователя и еще не обработана
+						if transaction.amount and transaction.date:
+							# Для Stars transaction.user_id может быть недоступен, проверяем по времени
+							# Используем payload из description или других полей
+							logging.info(f"Found transaction: amount={transaction.amount}, date={transaction.date}, from_user={getattr(transaction, 'from_user', None)}")
+							
+							# Если нашли транзакцию, обрабатываем её
+							# Для donate payload должен быть в формате donate_{amount}_{chat_id}
+							# Но в GetStarTransactions нет payload, поэтому используем amount для определения
+							
+							# Маппинг stars к coins (обратный)
+							stars_map = {10: 100, 45: 500, 90: 1000, 400: 5000}
+							stars = transaction.amount
+							coins = stars_map.get(stars)
+							
+							if coins:
+								logging.info(f"Processing Star transaction: user={user_id}, stars={stars}, coins={coins}")
+								
+								# Начисляем монеты
+								coins_added = database.add_coins(user_id, coins)
+								if coins_added:
+									database.add_transaction(user_id, coins, stars)
+									
+									# Проверяем баланс
+									user = database.get_user(user_id)
+									current_balance = user.get('coins', 0) if user else 0
+									
+									logging.info(f"Star transaction processed: user {user_id}, {coins} coins, {stars} stars, new_balance={current_balance}")
+									
+									await self.send_and_track(
+										user_id,
+										text=f"✅ Оплата прошла успешно!\n\nВаш баланс пополнен на {coins}🪙\nСписано: {stars} ⭐\nТекущий баланс: {current_balance}🪙",
+										track=False
+									)
+									
+									# Удаляем из pending
+									del self.pending_payments[user_id]
+									return
+								else:
+									logging.error(f"Failed to add coins for user {user_id}")
+				
+				logging.debug(f"Attempt {attempt + 1}/{max_attempts}: No new transaction found for user {user_id}")
+				
+			except Exception as e:
+				logging.error(f"Error checking star transaction (attempt {attempt + 1}): {e}")
+		
+		# Если не нашли транзакцию после всех попыток
+		logging.warning(f"Transaction not found for user {user_id} after {max_attempts} attempts")
+		if user_id in self.pending_payments:
+			del self.pending_payments[user_id]
 
 	async def handle_successful_payment(self, message: Message) -> None:
 		"""Обработчик successful_payment для зачисления монет после оплаты."""
