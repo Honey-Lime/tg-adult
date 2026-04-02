@@ -317,6 +317,15 @@
 
           const placeholder = card.querySelector(".media-placeholder");
 
+          // Таймаут на случай если загрузка зависнет
+          const timeout = setTimeout(() => {
+            if (card.dataset.mediaLoaded !== "true") {
+              placeholder.innerHTML = "<div>⏱️</div>";
+              card.dataset.mediaLoaded = "true";
+              resolve();
+            }
+          }, 10000); // 10 секунд таймаут
+
           if (isVideo) {
             const video = document.createElement("video");
             video.src = mediaUrl;
@@ -327,6 +336,7 @@
             video.preload = "metadata";
 
             video.onloadedmetadata = () => {
+              clearTimeout(timeout);
               placeholder.innerHTML = "";
               placeholder.appendChild(video);
               card.dataset.mediaLoaded = "true";
@@ -345,6 +355,7 @@
             };
 
             video.onerror = () => {
+              clearTimeout(timeout);
               placeholder.innerHTML = "<div>⚠️</div>";
               card.dataset.mediaLoaded = "true";
               resolve();
@@ -358,6 +369,7 @@
             image.loading = "lazy";
 
             image.onload = () => {
+              clearTimeout(timeout);
               placeholder.innerHTML = "";
               placeholder.appendChild(image);
               card.dataset.mediaLoaded = "true";
@@ -376,6 +388,7 @@
             };
 
             image.onerror = () => {
+              clearTimeout(timeout);
               placeholder.innerHTML = "<div>⚠️</div>";
               card.dataset.mediaLoaded = "true";
               resolve();
