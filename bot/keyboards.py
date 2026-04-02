@@ -138,6 +138,15 @@ def get_video_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
 
+def get_video_save_only_keyboard(video_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """
+    Клавиатура с одной кнопкой "Сохранить 50" для видео после оценки.
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text(lang, 'btn_video_save'), callback_data=f"video_save_{video_id}")]
+    ])
+
+
 def get_video_report_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """
     Клавиатура выбора причины жалобы на видео.

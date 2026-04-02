@@ -656,6 +656,10 @@ class BotController:
 					await handle_video_dislike(self, chat_id, message_id, lang)
 				elif callback.data == "video_save":
 					await handle_video_save(self, chat_id, message_id, lang)
+				elif callback.data.startswith("video_save_"):
+					# Обработка кнопки "Сохранить 50" после оценки видео
+					video_id = int(callback.data.split("_")[2])
+					await handle_video_save(self, chat_id, message_id, lang, video_id)
 				elif callback.data == "video_report":
 					await handle_video_report_menu(self, chat_id, message_id, lang)
 				elif callback.data == "video_report_inappropriate":
