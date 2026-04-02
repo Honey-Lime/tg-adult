@@ -186,6 +186,7 @@
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
+      console.log("Script started, Telegram available:", !!window.Telegram);
       const tg = window.Telegram?.WebApp || {
         expand: () => {},
         isVersionAtLeast: () => false,
@@ -201,6 +202,12 @@
 
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get("user_id");
+      console.log(
+        "Script started, Telegram available:",
+        !!window.Telegram,
+        "User ID:",
+        userId,
+      );
 
       const gallery = document.getElementById("gallery");
       const topAnimeBtn = document.getElementById("topAnimeBtn");
@@ -216,14 +223,24 @@
       let savedFilter = "all"; // "all" | "photo" | "video"
 
       async function loadImages(endpoint) {
+        console.log("loadImages called with endpoint:", endpoint);
         gallery.innerHTML = '<div class="loading">Загрузка...</div>';
         try {
-          const response = await fetch(endpoint);
+          const fullUrl = endpoint.startsWith("http")
+            ? endpoint
+            : window.location.origin + endpoint;
+          console.log("Fetching from:", fullUrl);
+          const response = await fetch(fullUrl);
+          console.log("Response status:", response.status);
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
           const images = await response.json();
+          console.log("Received images:", images.length);
           renderGallery(images);
         } catch (error) {
-          gallery.innerHTML = '<div class="loading">Ошибка загрузки</div>';
-          console.error(error);
+          console.error("loadImages error:", error);
+          gallery.innerHTML = `<div class="loading">Ошибка: ${error.message}</div>`;
         }
       }
 
@@ -519,7 +536,7 @@
       }
 
       function toggleFullscreen() {
-        if (!tg.isVersionAtLeast("8.0")) {
+        if (!tg.requestFullscreen || !tg.exitFullscreen) {
           alert(
             "Полноэкранный режим не поддерживается в вашей версии Telegram",
           );
