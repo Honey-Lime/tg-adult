@@ -32,6 +32,19 @@
         z-index: 1000;
       }
 
+      /* Fullscreen режим через класс */
+      body.tg-fullscreen {
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+      body.tg-fullscreen .fullscreen-btn {
+        display: none;
+      }
+      body.tg-fullscreen .gallery {
+        padding: 0 !important;
+        margin: 0 !important;
+      }
+
       /* Адаптация для узких экранов */
       @media (max-width: 600px) {
         .fullscreen-btn {
@@ -190,13 +203,16 @@
         expand: () => {},
         isVersionAtLeast: () => false,
         onEvent: () => {},
-        exitFullscreen: null,
-        requestFullscreen: null,
         isFullscreen: false,
         showAlert: (msg) => alert(msg),
+        viewportHeight: 0,
       };
+
+      // Инициализация Telegram WebApp
       if (window.Telegram?.WebApp) {
+        tg.ready();
         tg.expand();
+        console.log("Telegram WebApp initialized, version:", tg.version);
       }
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -524,53 +540,69 @@
           : "⛶ На весь экран";
       }
 
-      function toggleFullscreen() {
-        const elem = document.documentElement;
+      async function toggleFullscreen() {
+        console.log(
+          "toggleFullscreen called, fullscreenActive:",
+          fullscreenActive,
+        );
+        tg.showAlert(
+          "Fullscreen toggle: " + (fullscreenActive ? "exit" : "enter"),
+        );
 
         if (!fullscreenActive) {
-          // Вход в fullscreen: приоритет браузерному API (работает везде)
+          // Вход в fullscreen
+          tg.expand();
+          console.log("Called tg.expand()");
+
+          // Пробуем браузерный API
+          const elem = document.documentElement;
           if (elem.requestFullscreen) {
-            elem.requestFullscreen();
+            try {
+              await elem.requestFullscreen();
+              console.log("Browser fullscreen entered");
+            } catch (err) {
+              console.log("Browser fullscreen failed:", err);
+            }
           } else if (elem.webkitRequestFullscreen) {
             elem.webkitRequestFullscreen();
           } else if (elem.msRequestFullscreen) {
             elem.msRequestFullscreen();
-          } else if (tg.requestFullscreen) {
-            // Фоллбэк на Telegram API
-            tg.requestFullscreen();
-          } else {
-            tg.showAlert(
-              "Полноэкранный режим не поддерживается вашим браузером",
-            );
           }
+
+          // Добавляем класс для fullscreen стилей
+          document.body.classList.add("tg-fullscreen");
+          fullscreenActive = true;
         } else {
-          // Выход из fullscreen: приоритет браузерному API
+          // Выход из fullscreen
           if (document.exitFullscreen) {
-            document.exitFullscreen();
+            try {
+              await document.exitFullscreen();
+              console.log("Browser fullscreen exited");
+            } catch (err) {
+              console.log("Browser exit failed:", err);
+            }
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
           } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
-          } else if (tg.exitFullscreen) {
-            // Фоллбэк на Telegram API
-            tg.exitFullscreen();
           }
+
+          // Удаляем класс
+          document.body.classList.remove("tg-fullscreen");
+          fullscreenActive = false;
         }
+
+        updateFullscreenButton();
+        console.log("fullscreenActive set to:", fullscreenActive);
       }
 
       fullscreenBtn.addEventListener("click", toggleFullscreen);
 
-      // Слушаем изменения fullscreen через Telegram API
-      if (tg.onEvent && tg.isVersionAtLeast("6.1")) {
-        tg.onEvent("fullscreenChanged", () => {
-          fullscreenActive = !!tg.isFullscreen;
-          updateFullscreenButton();
-        });
-      }
-
       // Слушаем изменения fullscreen через браузерный API
       document.addEventListener("fullscreenchange", () => {
-        fullscreenActive = document.fullscreenElement !== null;
+        const isFullscreen = document.fullscreenElement !== null;
+        console.log("fullscreenchange event, isFullscreen:", isFullscreen);
+        fullscreenActive = isFullscreen;
         updateFullscreenButton();
       });
       document.addEventListener("webkitfullscreenchange", () => {
@@ -586,7 +618,12 @@
         updateFullscreenButton();
       });
 
+      // Инициализация кнопки
       updateFullscreenButton();
+      console.log(
+        "Fullscreen handler initialized, tg.isFullscreen:",
+        tg.isFullscreen,
+      );
     </script>
 
     <!-- Модальное окно -->
