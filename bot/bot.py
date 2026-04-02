@@ -811,16 +811,19 @@ class BotController:
 			await self.send_and_track(chat_id, text="Неверный тариф", track=False)
 			return
 
+		logging.info(f"Sending invoice: chat_id={chat_id}, amount={amount} coins, stars={stars}, payload=donate_{amount}_{chat_id}")
+		
 		await self.bot.send_invoice(
 			chat_id=chat_id,
 			title=f"Пополнение баланса на {amount}🪙",
 			description=f"Пополнение баланса бота на {amount} монет. После оплаты монеты будут зачислены на ваш баланс.",
 			payload=f"donate_{amount}_{chat_id}",
-			provider_token="",
+			provider_token=None,  # Для Telegram Stars не требуется
 			currency="XTR",
 			prices=[types.LabeledPrice(label=f"{amount} 🪙", amount=stars)],
 			start_parameter="donate",
 		)
+		logging.info(f"Invoice sent successfully to {chat_id}")
 
 	async def _handle_language_menu(self, chat_id: int, message_id: int) -> None:
 		"""Показ меню выбора языка"""
