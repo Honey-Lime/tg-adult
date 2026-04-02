@@ -192,13 +192,39 @@
       <button id="filterVideoBtn">Видео</button>
     </div>
     <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
+    <div
+      id="debugPanel"
+      style="
+        position: fixed;
+        top: 10px;
+        left: 10px;
+        background: rgba(0, 0, 0, 0.8);
+        color: #0f0;
+        padding: 10px;
+        font-size: 12px;
+        z-index: 9999;
+        max-height: 200px;
+        overflow: auto;
+      "
+    ></div>
     <div id="gallery" class="gallery">
       <div class="loading">Загрузка...</div>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <script>
-      console.log("Script started, Telegram available:", !!window.Telegram);
+      // Debug панель
+      const debugPanel = document.getElementById("debugPanel");
+      function debugLog(msg) {
+        console.log(msg);
+        if (debugPanel) {
+          debugPanel.innerHTML += "<div>" + msg + "</div>";
+          debugPanel.scrollTop = debugPanel.scrollHeight;
+        }
+      }
+
+      debugLog("Script started, Telegram available: " + !!window.Telegram);
+
       const tg = window.Telegram?.WebApp || {
         expand: () => {},
         isVersionAtLeast: () => false,
@@ -212,7 +238,8 @@
       if (window.Telegram?.WebApp) {
         tg.ready();
         tg.expand();
-        console.log("Telegram WebApp initialized, version:", tg.version);
+        debugLog("Telegram WebApp initialized, version: " + tg.version);
+        debugLog("tg.expand exists: " + typeof tg.expand);
       }
 
       const urlParams = new URLSearchParams(window.location.search);
@@ -234,7 +261,7 @@
       // Состояние сортировки для сохраненных
       let savedSortBy = "newest"; // "rating" | "newest"
       let savedSortOrder = "desc"; // "asc" | "desc"
-      let savedFilter = "all"; // "all" | "photo" | "video"
+      let savedFilter = "photo"; // "all" | "photo" | "video"
 
       async function loadImages(endpoint) {
         console.log("loadImages called with endpoint:", endpoint);
@@ -321,12 +348,21 @@
         loadImages("/api/top?type=1");
       });
 
+      let isFirstSavedLoad = true;
+
       savedBtn.addEventListener("click", () => {
         if (!userId) {
           gallery.innerHTML =
             '<div class="loading">Ошибка: не удалось определить пользователя</div>';
           return;
         }
+
+        // При первом входе устанавливаем фильтр "photo"
+        if (isFirstSavedLoad) {
+          savedFilter = "photo";
+          isFirstSavedLoad = false;
+        }
+
         // Показываем кнопки сортировки и фильтрации
         document.getElementById("sortButtons").style.display = "flex";
         document.getElementById("filterButtons").style.display = "flex";
@@ -340,11 +376,13 @@
       const sortByNewestBtn = document.getElementById("sortByNewestBtn");
 
       function updateSortButtons() {
-        // Сбрасываем стили
+        // Сбрасываем стили - неактивные кнопки белые
         sortByRatingBtn.style.background =
           "var(--tg-theme-button-color, #2481cc)";
+        sortByRatingBtn.style.color = "var(--tg-theme-button-text-color, #fff)";
         sortByNewestBtn.style.background =
           "var(--tg-theme-button-color, #2481cc)";
+        sortByNewestBtn.style.color = "var(--tg-theme-button-text-color, #fff)";
 
         // Подсвечиваем активную кнопку
         if (savedSortBy === "rating") {
@@ -375,11 +413,13 @@
       }
 
       function updateFilterButtons() {
-        // Сбрасываем стили
+        // Сбрасываем стили - неактивные кнопки белые
         filterPhotoBtn.style.background =
           "var(--tg-theme-button-color, #2481cc)";
+        filterPhotoBtn.style.color = "var(--tg-theme-button-text-color, #fff)";
         filterVideoBtn.style.background =
           "var(--tg-theme-button-color, #2481cc)";
+        filterVideoBtn.style.color = "var(--tg-theme-button-text-color, #fff)";
 
         // Подсвечиваем активную кнопку
         if (savedFilter === "photo") {
@@ -451,19 +491,12 @@
         captionText.innerHTML = altText;
       }
 
-      // Текущее видео для сохранения
-      let currentVideoId = null;
-
       // Модальное окно для видео
       function openVideoModal(videoSrc, altText, videoId = null) {
         const modal = document.getElementById("imageModal");
         const modalImg = document.getElementById("modalImage");
         const modalVideo = document.getElementById("modalVideo");
         const captionText = document.getElementById("caption");
-        const videoSaveButton = document.getElementById("videoSaveButton");
-
-        // Сохраняем ID видео
-        currentVideoId = videoId;
 
         // Скрываем изображение, показываем видео
         modalImg.style.display = "none";
@@ -473,42 +506,8 @@
           modalVideo.play();
         }
 
-        // Показываем кнопку сохранения, если это сохраненное видео
-        videoSaveButton.style.display = videoId ? "block" : "none";
-
         modal.style.display = "block";
         captionText.innerHTML = altText;
-      }
-
-      async function saveCurrentVideo() {
-        if (!currentVideoId || !userId) {
-          tg.showAlert("Ошибка: не удалось определить видео или пользователя");
-          return;
-        }
-
-        try {
-          const response = await fetch(
-            `/api/save_video?user_id=${userId}&video_id=${currentVideoId}`,
-            {
-              method: "POST",
-            },
-          );
-
-          if (response.ok) {
-            tg.showAlert("✅ Видео сохранено! 🪙-50");
-            // Скрываем кнопку после сохранения
-            document.getElementById("videoSaveButton").style.display = "none";
-            currentVideoId = null;
-          } else {
-            const error = await response.json();
-            tg.showAlert(
-              "❌ Ошибка: " + (error.detail || "Не удалось сохранить видео"),
-            );
-          }
-        } catch (error) {
-          console.error(error);
-          tg.showAlert("❌ Ошибка сохранения");
-        }
       }
 
       function closeModal() {
@@ -541,59 +540,64 @@
       }
 
       async function toggleFullscreen() {
-        console.log(
-          "toggleFullscreen called, fullscreenActive:",
-          fullscreenActive,
-        );
-        tg.showAlert(
-          "Fullscreen toggle: " + (fullscreenActive ? "exit" : "enter"),
+        debugLog(
+          "toggleFullscreen called, fullscreenActive: " + fullscreenActive,
         );
 
         if (!fullscreenActive) {
           // Вход в fullscreen
+          debugLog("Entering fullscreen...");
           tg.expand();
-          console.log("Called tg.expand()");
+          debugLog("Called tg.expand()");
 
           // Пробуем браузерный API
           const elem = document.documentElement;
           if (elem.requestFullscreen) {
             try {
               await elem.requestFullscreen();
-              console.log("Browser fullscreen entered");
+              debugLog("Browser fullscreen entered");
             } catch (err) {
-              console.log("Browser fullscreen failed:", err);
+              debugLog("Browser fullscreen failed: " + err.message);
             }
           } else if (elem.webkitRequestFullscreen) {
             elem.webkitRequestFullscreen();
+            debugLog("webkitRequestFullscreen called");
           } else if (elem.msRequestFullscreen) {
             elem.msRequestFullscreen();
+            debugLog("msRequestFullscreen called");
+          } else {
+            debugLog("No browser fullscreen API available");
           }
 
           // Добавляем класс для fullscreen стилей
           document.body.classList.add("tg-fullscreen");
           fullscreenActive = true;
+          debugLog("fullscreenActive = true");
         } else {
           // Выход из fullscreen
+          debugLog("Exiting fullscreen...");
           if (document.exitFullscreen) {
             try {
               await document.exitFullscreen();
-              console.log("Browser fullscreen exited");
+              debugLog("Browser fullscreen exited");
             } catch (err) {
-              console.log("Browser exit failed:", err);
+              debugLog("Browser exit failed: " + err.message);
             }
           } else if (document.webkitExitFullscreen) {
             document.webkitExitFullscreen();
+            debugLog("webkitExitFullscreen called");
           } else if (document.msExitFullscreen) {
             document.msExitFullscreen();
+            debugLog("msExitFullscreen called");
           }
 
           // Удаляем класс
           document.body.classList.remove("tg-fullscreen");
           fullscreenActive = false;
+          debugLog("fullscreenActive = false");
         }
 
         updateFullscreenButton();
-        console.log("fullscreenActive set to:", fullscreenActive);
       }
 
       fullscreenBtn.addEventListener("click", toggleFullscreen);
@@ -637,29 +641,6 @@
         controls
       ></video>
       <div id="caption"></div>
-      <div
-        id="videoSaveButton"
-        style="display: none; text-align: center; margin-top: 20px"
-      >
-        <button
-          id="saveVideoBtn"
-          style="
-            padding: 12px 24px;
-            background: var(--tg-theme-button-color, #2481cc);
-            color: var(--tg-theme-button-text-color, #fff);
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-          "
-          onclick="
-            event.stopPropagation();
-            saveCurrentVideo();
-          "
-        >
-          Сохранить 50🪙
-        </button>
-      </div>
     </div>
   </body>
 </html>

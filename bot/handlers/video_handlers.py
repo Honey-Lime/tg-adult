@@ -2,6 +2,7 @@
 Обработчики видео: выбор типа видео, просмотр, лайки/дизлайки.
 """
 
+import asyncio
 import database
 from keyboards import get_video_menu_keyboard, get_video_keyboard, get_video_report_keyboard
 from locales import get_text
@@ -119,7 +120,6 @@ async def handle_video_like(controller, chat_id: int, message_id: int, lang: str
         )
         
         # Через 2 секунды показываем меню выбора видео
-        import asyncio
         asyncio.create_task(_show_video_menu_delayed(controller, chat_id, lang))
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'error'), track=False)
@@ -171,7 +171,6 @@ async def handle_video_dislike(controller, chat_id: int, message_id: int, lang: 
         )
         
         # Через 2 секунды показываем меню выбора видео
-        import asyncio
         asyncio.create_task(_show_video_menu_delayed(controller, chat_id, lang))
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'error'), track=False)
