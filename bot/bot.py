@@ -892,7 +892,7 @@ class BotController:
 			await self.send_and_track(chat_id, text="Ошибка тарифа", track=False)
 			return
 
-		stars_map = {100: 10, 500: 45, 1000: 90, 5000: 400}
+		stars_map = {100: 10, 500: 45, 1000: 80, 5000: 350}
 		stars = stars_map.get(amount)
 		if not stars:
 			await self.send_and_track(chat_id, text="Неверный тариф", track=False)
