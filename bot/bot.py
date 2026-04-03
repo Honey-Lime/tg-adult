@@ -921,7 +921,7 @@ class BotController:
 		current_lang = database.get_user_language(chat_id)
 		keyboard = keyboards.get_language_keyboard(current_lang)
 		lang_name = get_language_name(current_lang)
-		text = get_text(current_lang, 'language_menu_text', lang=lang_name)
+		text = get_text(current_lang, 'language_menu_text', language=lang_name)
 		await self.send_and_track(chat_id, text=text, reply_markup=keyboard, track=False)
 
 	async def _handle_language_select(self, chat_id: int, callback_data: str) -> None:

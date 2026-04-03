@@ -15,7 +15,7 @@ LOCALES = {
         'btn_language': "🌐 Language / Язык",
         
         # Выбор языка
-        'language_menu_text': "🌐 Выберите язык / Select language:\n\nТекущий язык / Current language: {lang}",
+        'language_menu_text': "🌐 Выберите язык / Select language:\n\nТекущий язык / Current language: {language}",
         'btn_lang_ru': "🇷🇺 Русский",
         'btn_lang_en': "🇺🇸 English",
         'btn_back': "🔙 Назад",
@@ -184,7 +184,7 @@ LOCALES = {
         'btn_language': "🌐 Language / Язык",
         
         # Выбор языка
-        'language_menu_text': "🌐 Select language:\n\nCurrent language: {lang}",
+        'language_menu_text': "🌐 Select language:\n\nCurrent language: {language}",
         'btn_lang_ru': "🇷🇺 Русский",
         'btn_lang_en': "🇺🇸 English",
         'btn_back': "🔙 Back",
