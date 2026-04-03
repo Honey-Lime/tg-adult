@@ -175,21 +175,21 @@
   </head>
   <body>
     <div class="menu">
-      <button id="topAnimeBtn">Топ аниме</button>
-      <button id="topRealBtn">Топ фото</button>
-      <button id="savedBtn">Сохраненные</button>
+      <button id="topAnimeBtn"></button>
+      <button id="topRealBtn"></button>
+      <button id="savedBtn"></button>
     </div>
     <div class="menu" id="sortButtons" style="display: none">
-      <button id="sortByRatingBtn">⭐ По оценкам</button>
-      <button id="sortByNewestBtn">🕐 По новизне</button>
+      <button id="sortByRatingBtn"></button>
+      <button id="sortByNewestBtn"></button>
     </div>
     <div class="menu" id="filterButtons" style="display: none">
-      <button id="filterPhotoBtn">📷 Фото</button>
-      <button id="filterVideoBtn">Видео</button>
+      <button id="filterPhotoBtn"></button>
+      <button id="filterVideoBtn"></button>
     </div>
-    <div class="fullscreen-btn" id="fullscreenBtn">⛶ На весь экран</div>
+    <div class="fullscreen-btn" id="fullscreenBtn"></div>
     <div id="gallery" class="gallery">
-      <div class="loading">Загрузка...</div>
+      <div class="loading"></div>
     </div>
 
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
@@ -199,6 +199,57 @@
 
       const urlParams = new URLSearchParams(window.location.search);
       const userId = urlParams.get("user_id");
+      const userLang = urlParams.get("lang") || "ru";
+
+      // Локализация
+      const translations = {
+        ru: {
+          topAnime: "Топ аниме",
+          topReal: "Топ фото",
+          saved: "Сохраненные",
+          byRating: "⭐ По оценкам",
+          byNewest: "🕐 По новизне",
+          photo: "📷 Фото",
+          video: "Видео",
+          fullscreen: "⛶ На весь экран",
+          loading: "Загрузка...",
+          loadError: "Ошибка загрузки",
+          noItems: "Нет элементов",
+          userError: "Ошибка: не удалось определить пользователя",
+          anime: "Аниме",
+          photoType: "Фото",
+          videoType: "🎬 Видео",
+          fullscreenNotSupported:
+            "Полноэкранный режим не поддерживается в вашей версии Telegram",
+          fullscreenOn: "Приложение в полноэкранном режиме",
+          fullscreenOff: "Приложение вышло из полноэкранного режима",
+        },
+        en: {
+          topAnime: "Top anime",
+          topReal: "Top photo",
+          saved: "Saved",
+          byRating: "⭐ By rating",
+          byNewest: "🕐 By newest",
+          photo: "📷 Photo",
+          video: "Video",
+          fullscreen: "⛶ Fullscreen",
+          loading: "Loading...",
+          loadError: "Loading error",
+          noItems: "No items",
+          userError: "Error: failed to identify user",
+          anime: "Anime",
+          photoType: "Photo",
+          videoType: "🎬 Video",
+          fullscreenNotSupported:
+            "Fullscreen mode is not supported in your Telegram version",
+          fullscreenOn: "App is in fullscreen mode",
+          fullscreenOff: "App exited fullscreen mode",
+        },
+      };
+
+      function t(key) {
+        return translations[userLang]?.[key] || translations.ru[key] || key;
+      }
 
       const gallery = document.getElementById("gallery");
       const topAnimeBtn = document.getElementById("topAnimeBtn");
@@ -207,26 +258,40 @@
       const filterPhotoBtn = document.getElementById("filterPhotoBtn");
       const filterVideoBtn = document.getElementById("filterVideoBtn");
 
+      // Инициализация текстов кнопок
+      function initButtonTexts() {
+        topAnimeBtn.textContent = t("topAnime");
+        topRealBtn.textContent = t("topReal");
+        savedBtn.textContent = t("saved");
+        filterPhotoBtn.textContent = t("photo");
+        filterVideoBtn.textContent = t("video");
+        document.getElementById("fullscreenBtn").textContent = t("fullscreen");
+        // Обновляем текст загрузки
+        const loadingEl = gallery.querySelector(".loading");
+        if (loadingEl) loadingEl.textContent = t("loading");
+      }
+      initButtonTexts();
+
       // Состояние сортировки для сохраненных
       let savedSortBy = "newest"; // "rating" | "newest"
       let savedSortOrder = "desc"; // "asc" | "desc"
       let savedFilter = "photo"; // "all" | "photo" | "video"
 
       async function loadImages(endpoint) {
-        gallery.innerHTML = '<div class="loading">Загрузка...</div>';
+        gallery.innerHTML = `<div class="loading">${t("loading")}</div>`;
         try {
           const response = await fetch(endpoint);
           const images = await response.json();
           renderGallery(images);
         } catch (error) {
-          gallery.innerHTML = '<div class="loading">Ошибка загрузки</div>';
+          gallery.innerHTML = `<div class="loading">${t("loadError")}</div>`;
           console.error(error);
         }
       }
 
       function renderGallery(images) {
         if (images.length === 0) {
-          gallery.innerHTML = '<div class="loading">Нет элементов</div>';
+          gallery.innerHTML = `<div class="loading">${t("noItems")}</div>`;
           return;
         }
 
@@ -237,10 +302,10 @@
               img.path.endsWith(".mp4") ||
               img.path.endsWith(".mov");
             const typeText = isVideo
-              ? "🎬 Видео"
+              ? t("videoType")
               : img.type === 0
-                ? "Аниме"
-                : "Фото";
+                ? t("anime")
+                : t("photoType");
             const mediaUrl = isVideo
               ? `/videos/${img.path}`
               : `/images/${img.type === 0 ? "anime" : "real"}/${img.path}`;
@@ -272,10 +337,10 @@
             img.path.endsWith(".mp4") ||
             img.path.endsWith(".mov");
           const typeText = isVideo
-            ? "🎬 Видео"
+            ? t("videoType")
             : img.type === 0
-              ? "Аниме"
-              : "Фото";
+              ? t("anime")
+              : t("photoType");
 
           card.onclick = () =>
             handleCardClick(
@@ -287,6 +352,7 @@
               img.dislikes,
               img.value,
               img.media_type || (isVideo ? "video" : "photo"),
+              img.type,
             );
         });
       }
@@ -300,6 +366,7 @@
         dislikes,
         value,
         mediaType,
+        imageType,
       ) {
         const isVideo =
           mediaType === "video" ||
@@ -307,7 +374,7 @@
           path.endsWith(".mov");
         const mediaUrl = isVideo
           ? `/videos/${path}`
-          : `/images/${typeText === "Аниме" ? "anime" : "real"}/${path}`;
+          : `/images/${imageType === 0 ? "anime" : "real"}/${path}`;
 
         if (isVideo) {
           openVideoModal(mediaUrl, typeText, id);
@@ -332,8 +399,7 @@
 
       savedBtn.addEventListener("click", () => {
         if (!userId) {
-          gallery.innerHTML =
-            '<div class="loading">Ошибка: не удалось определить пользователя</div>';
+          gallery.innerHTML = `<div class="loading">${t("userError")}</div>`;
           return;
         }
 
@@ -388,8 +454,8 @@
               ? " ⬇️"
               : " ⬆️"
             : "";
-        sortByRatingBtn.textContent = "⭐ По оценкам" + ratingArrow;
-        sortByNewestBtn.textContent = "🕐 По новизне" + newestArrow;
+        sortByRatingBtn.textContent = t("byRating") + ratingArrow;
+        sortByNewestBtn.textContent = t("byNewest") + newestArrow;
       }
 
       function updateFilterButtons() {
@@ -525,9 +591,7 @@
           // проверяем, поддерживается ли функция
           tg.requestFullscreen();
         } else {
-          tg.showAlert(
-            "Полноэкранный режим не поддерживается в вашей версии Telegram",
-          );
+          tg.showAlert(t("fullscreenNotSupported"));
         }
       }
 
@@ -550,9 +614,9 @@
       // Отслеживание изменения состояния полноэкранного режима
       tg.onEvent("fullscreenChanged", () => {
         if (tg.isFullscreen) {
-          console.log("Приложение в полноэкранном режиме");
+          console.log(t("fullscreenOn"));
         } else {
-          console.log("Приложение вышло из полноэкранного режима");
+          console.log(t("fullscreenOff"));
         }
       });
     </script>

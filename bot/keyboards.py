@@ -96,7 +96,7 @@ def get_web_app_keyboard(chat_id: int, lang: str = 'ru') -> InlineKeyboardMarkup
     """
     Клавиатура с кнопкой открытия мини-приложения.
     """
-    app_url = f"https://hotpicturesbot.ru/app?user_id={chat_id}"
+    app_url = f"https://hotpicturesbot.ru/app?user_id={chat_id}&lang={lang}"
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text(lang, 'btn_open_miniapp'), web_app=WebAppInfo(url=app_url))]
     ])
