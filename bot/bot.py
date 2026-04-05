@@ -66,6 +66,7 @@ from handlers.admin import (
     handle_promo_create,
     handle_promo_stats,
     handle_promo_delete,
+    handle_admin_referral_stats,
 )
 from handlers.admin.promo_handler import handle_promo_menu_back
 
@@ -112,6 +113,9 @@ class BotController:
 		# Состояние ожидания имени для рекламной ссылки
 		self.waiting_for_promo_name: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода имени ссылки)
 		self.waiting_for_promo_delete: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли админ ввода номера для удаления)
+		
+		# Состояние ожидания сообщения обратной связи
+		self.waiting_for_feedback: Dict[int, bool] = {}  # chat_id -> bool (ожидает ли пользователь ввода сообщения)
 		
 		# Ожидающие платежи для Telegram Stars
 		self.pending_payments: Dict[int, dict] = {}  # user_id -> {pre_checkout_query_id, timestamp}
@@ -316,7 +320,7 @@ class BotController:
 		if promo_code:
 			promo_link = database.get_promo_link_by_code(promo_code)
 			if promo_link:
-				database.track_promo_link_click(promo_link['id'], chat_id)
+				database.track_promo_link_click(promo_code, chat_id)
 				logging.info(f"Переход по промо-ссылке: {promo_code}, пользователь: {chat_id}")
 
 		# Определяем язык пользователя из данных Telegram
@@ -329,7 +333,7 @@ class BotController:
 				user_lang = 'en'
 
 		# Получаем пользователя и флаг создания
-		user, created = database.get_or_create_user(chat_id, referrer_id, user_lang)
+		user, created = database.get_or_create_user(chat_id, referrer_id, user_lang, promo_code)
 
 		if user is None:
 			# Ошибка при получении/создании пользователя
@@ -433,6 +437,44 @@ class BotController:
 				track=False
 			)
 			# Удаляем сообщение пользователя (опционально)
+			try:
+				await message.delete()
+			except:
+				pass
+
+		# Обработка сообщения обратной связи
+		if chat_id in self.waiting_for_feedback and self.waiting_for_feedback[chat_id]:
+			if not message.text:
+				await message.answer(get_text(lang, 'feedback_prompt'))
+				return
+			# Сохраняем сообщение в БД
+			database.add_feedback_message(chat_id, message.text)
+			# Сбрасываем состояние
+			self.waiting_for_feedback[chat_id] = False
+			# Отправляем подтверждение пользователю
+			await self.send_and_track(
+				chat_id,
+				text=get_text(lang, 'feedback_sent'),
+				track=False
+			)
+			# Отправляем сообщение админам
+			user = database.get_user(chat_id)
+			first_name = user.get('first_name', '') if user else ''
+			username = user.get('username', '') if user else ''
+			user_info = f"ID: {chat_id}"
+			if first_name:
+				user_info += f" | Имя: {first_name}"
+			if username:
+				user_info += f" | @{username}"
+			for admin_id in self.admin_ids:
+				try:
+					await self.bot.send_message(
+						admin_id,
+						f"💬 Обратная связь от пользователя\n{user_info}\n\n📝 Сообщение:\n{message.text}"
+					)
+				except Exception as e:
+					logging.error(f"Не удалось отправить обратную связь админу {admin_id}: {e}")
+			# Удаляем сообщение пользователя
 			try:
 				await message.delete()
 			except:
@@ -806,6 +848,12 @@ class BotController:
 			elif callback.data == "referral":
 				await self._handle_referral(chat_id)
 
+			# === ОБРАТНАЯ СВЯЗЬ ===
+			elif callback.data == "feedback":
+				await self._handle_feedback_start(chat_id, message_id, lang)
+			elif callback.data == "feedback_cancel":
+				await self._handle_feedback_cancel(chat_id, message_id, lang)
+
 			# === ДОНАТ ===
 			elif callback.data == "donate":
 				await self._handle_donate_menu(chat_id, message_id, lang)
@@ -843,6 +891,8 @@ class BotController:
 				await self._handle_admin_logs(chat_id, message_id, lang)
 			elif callback.data == "admin_promo_links":
 				await handle_admin_promo_links(self, chat_id, message_id, lang)
+			elif callback.data == "admin_referral_stats":
+				await handle_admin_referral_stats(self, chat_id, message_id, lang)
 			elif callback.data == "promo_create":
 				await handle_promo_create(self, chat_id, message_id, lang)
 			elif callback.data == "promo_stats":
@@ -874,6 +924,30 @@ class BotController:
 			text=f"🔗 Ваша реферальная ссылка:\n{link}\n\nПриглашайте друзей! За каждого нового пользователя вы получите 250 монет.",
 			track=False,
 		)
+
+	async def _handle_feedback_start(self, chat_id: int, message_id: int, lang: str) -> None:
+		"""Начало режима обратной связи"""
+		await self.delete_current(chat_id, message_id)
+		self.waiting_for_feedback[chat_id] = True
+		keyboard = keyboards.get_feedback_prompt_keyboard(lang)
+		await self.send_and_track(
+			chat_id,
+			text=get_text(lang, 'feedback_prompt'),
+			reply_markup=keyboard,
+			track=False
+		)
+
+	async def _handle_feedback_cancel(self, chat_id: int, message_id: int, lang: str) -> None:
+		"""Отмена обратной связи"""
+		self.waiting_for_feedback[chat_id] = False
+		await self.delete_current(chat_id, message_id)
+		await self.send_and_track(
+			chat_id,
+			text=get_text(lang, 'feedback_cancelled'),
+			track=False
+		)
+		# Возвращаем в главное меню
+		await self.send_menu(chat_id)
 
 	async def _handle_donate_menu(self, chat_id: int, message_id: int, lang: str) -> None:
 		"""Показ меню пополнения баланса"""

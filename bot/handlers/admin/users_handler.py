@@ -25,11 +25,12 @@ async def handle_admin_users(controller, chat_id: int, message_id: int, lang: st
     
     # Получение данных
     users = database.get_all_users_stats()
+    global_stats = database.get_global_users_stats()
     
     if not users:
         text = "❌ Нет данных о пользователях."
     else:
-        text = _format_users_stats(users)
+        text = _format_users_stats(users, global_stats)
     
     # Отправка ответа
     await controller.delete_current(chat_id, message_id)
@@ -45,17 +46,29 @@ async def handle_admin_users(controller, chat_id: int, message_id: int, lang: st
     )
 
 
-def _format_users_stats(users: list) -> str:
+def _format_users_stats(users: list, global_stats: dict) -> str:
     """
     Форматирует статистику пользователей в читаемый текст.
     
     Args:
         users: Список словарей с данными пользователей
+        global_stats: Словарь с общей статистикой
     
     Returns:
         Отформатированный текст статистики
     """
-    lines = ["📊 Статистика пользователей (ID | имя | просмотры):"]
+    lines = []
+    
+    # Общая статистика
+    if global_stats:
+        lines.append(
+            f"📊 Общая статистика:\n"
+            f"👥 Пользователей: {global_stats['total_users']}\n"
+            f"🎬 Среднее: аниме {global_stats['avg_anime']}, фото {global_stats['avg_real']}, "
+            f"видео {global_stats['avg_video']}, оценок сегодня {global_stats['today_ratings']}\n"
+        )
+    
+    lines.append(f"📊 Топ-25 пользователей (по общему кол-ву оценок):")
     
     for user in users:
         # Формируем отображаемое имя
@@ -69,9 +82,13 @@ def _format_users_stats(users: list) -> str:
         username = f"@{user['username']}" if user['username'] else '—'
         
         lines.append(
-            f"• {user['user_id']} | {display_name} ({username}) | "
-            f"Всего: {user['viewed_total']} "
-            f"(аниме: {user['viewed_anime_count']}, фото: {user['viewed_real_count']})"
+            f"{user['user_id']} | {display_name} ({username})"
         )
+        lines.append(
+            f"  Всего: {user['viewed_total']} "
+            f"(аниме: {user['viewed_anime_count']}, фото: {user['viewed_real_count']}, "
+            f"видео: {user['viewed_video_count']}, оценок сегодня: {user['today_ratings']})"
+        )
+        lines.append("")
     
     return "\n".join(lines)

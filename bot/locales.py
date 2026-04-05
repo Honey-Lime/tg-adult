@@ -11,7 +11,12 @@ LOCALES = {
         'btn_real': "🖼Фото",
         'btn_video': "🎞Видео",
         'btn_donate': "💰 Пополнить баланс",
-        'btn_referral': "🔗 Реферальная ссылка",
+        'btn_referral': "🔗 Реферальная ссылка (+250 за пользователя)",
+        'btn_feedback': "💬 Обратная связь",
+        'feedback_prompt': "Отправьте сообщение и его получит админ бота",
+        'btn_feedback_cancel': "❌ Отмена",
+        'feedback_sent': "✅ Ваше сообщение успешно отправлено администратору!",
+        'feedback_cancelled': "Отменено.",
         'btn_language': "🌐 Language / Язык",
         
         # Выбор языка
@@ -85,6 +90,7 @@ LOCALES = {
         'admin_moderation': "🛡 Модерация",
         'admin_notifications': "📢 Оповещения",
         'admin_promo_links': "🔗 Рекламные ссылки",
+        'admin_referral_stats': "📊 Статистика рефералов",
         'admin_load_images': "📥 Загрузка контента",
         'admin_clear_folder': "🗑 Очистить папку загрузки",
         'admin_cleanup_json': "🧹 Чистка по json",
@@ -180,7 +186,12 @@ LOCALES = {
         'btn_real': "🖼 Photo",
         'btn_video': "🎞 Video",
         'btn_donate': "💰 Top up balance",
-        'btn_referral': "🔗 Referral link",
+        'btn_referral': "🔗 Referral link (+250 per user)",
+        'btn_feedback': "💬 Feedback",
+        'feedback_prompt': "Send a message and the bot admin will receive it",
+        'btn_feedback_cancel': "❌ Cancel",
+        'feedback_sent': "✅ Your message has been successfully sent to the administrator!",
+        'feedback_cancelled': "Cancelled.",
         'btn_language': "🌐 Language / Язык",
         
         # Выбор языка
@@ -254,6 +265,7 @@ LOCALES = {
         'admin_moderation': "🛡 Moderation",
         'admin_notifications': "📢 Notifications",
         'admin_promo_links': "🔗 Promo links",
+        'admin_referral_stats': "📊 Referral stats",
         'admin_load_images': "📥 Load content",
         'admin_clear_folder': "🗑 Clear import folder",
         'admin_cleanup_json': "🧹 Cleanup by json",

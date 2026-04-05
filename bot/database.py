@@ -324,6 +324,19 @@ def init_db():
 					ADD COLUMN language TEXT DEFAULT 'ru'
 				""")
 				logging.info("✓ Добавлен столбец language в таблицу users")
+			# Проверка и добавление столбца promo_code (рекламная ссылка, по которой зарегистрировался)
+			cur.execute("""
+				SELECT column_name 
+				FROM information_schema.columns 
+				WHERE table_name = 'users' AND column_name = 'promo_code'
+			""")
+			if not cur.fetchone():
+				cur.execute("""
+					ALTER TABLE users
+					ADD COLUMN promo_code TEXT
+				""")
+				logging.info("✓ Добавлен столбец promo_code в таблицу users")
+
 			# Добавление столбца have_video в таблицу posts, если его нет
 			cur.execute("""
 				ALTER TABLE posts
@@ -387,6 +400,36 @@ def init_db():
 			""")
 			conn.commit()
 			logging.info("Transactions table initialized")
+			
+			# Создание таблицы для хранения оценок пользователей (лайки/дизлайки)
+			cur.execute("""
+				CREATE TABLE IF NOT EXISTS user_ratings_log (
+					id SERIAL PRIMARY KEY,
+					user_id BIGINT NOT NULL,
+					image_id INTEGER,
+					video_id INTEGER,
+					rating_type INTEGER NOT NULL,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_user_ratings_log_user_id ON user_ratings_log(user_id);
+				CREATE INDEX IF NOT EXISTS idx_user_ratings_log_created_at ON user_ratings_log(created_at);
+			""")
+			conn.commit()
+			logging.info("User ratings log table initialized")
+			
+			# Создание таблицы для обратной связи
+			cur.execute("""
+				CREATE TABLE IF NOT EXISTS feedback_messages (
+					id SERIAL PRIMARY KEY,
+					user_id BIGINT NOT NULL,
+					message TEXT NOT NULL,
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				);
+				CREATE INDEX IF NOT EXISTS idx_feedback_messages_user_id ON feedback_messages(user_id);
+				CREATE INDEX IF NOT EXISTS idx_feedback_messages_created_at ON feedback_messages(created_at);
+			""")
+			conn.commit()
+			logging.info("Feedback messages table initialized")
 			
 			# Исправление последовательности videos (если проблема с id)
 			fix_videos_sequence()
@@ -488,9 +531,10 @@ def load_all_message_history():
 		return_connection(conn)
 
 
-def get_all_users_stats():
+def get_all_users_stats(limit=25):
     """
-    Возвращает список пользователей с детальной статистикой.
+    Возвращает список пользователей с детальной статистикой,
+    отсортированный по убыванию общего кол-ва оценок.
     Каждый элемент: {
         'user_id': int,
         'first_name': str или None,
@@ -498,7 +542,9 @@ def get_all_users_stats():
         'username': str или None,
         'viewed_anime_count': int,
         'viewed_real_count': int,
-        'viewed_total': int
+        'viewed_video_count': int,
+        'viewed_total': int,
+        'today_ratings': int
     }
     """
     conn = get_connection()
@@ -513,11 +559,20 @@ def get_all_users_stats():
                        username,
                        COALESCE(array_length(viewed_anime, 1), 0) as viewed_anime_count,
                        COALESCE(array_length(viewed_real, 1), 0) as viewed_real_count,
+                       COALESCE(array_length(watched_videos, 1), 0) as viewed_video_count,
                        COALESCE(array_length(viewed_anime, 1), 0) +
-                       COALESCE(array_length(viewed_real, 1), 0) as viewed_total
+                       COALESCE(array_length(viewed_real, 1), 0) +
+                       COALESCE(array_length(watched_videos, 1), 0) as viewed_total,
+                       COALESCE((
+                           SELECT COUNT(*)
+                           FROM user_ratings_log r
+                           WHERE r.user_id = users.id
+                             AND r.created_at >= CURRENT_DATE
+                       ), 0) as today_ratings
                 FROM users
-                ORDER BY id
-            """)
+                ORDER BY viewed_total DESC
+                LIMIT %s
+            """, (limit,))
             rows = cur.fetchall()
             result = []
             for row in rows:
@@ -528,12 +583,67 @@ def get_all_users_stats():
                     'username': row[3],
                     'viewed_anime_count': row[4],
                     'viewed_real_count': row[5],
-                    'viewed_total': row[6]
+                    'viewed_video_count': row[6],
+                    'viewed_total': row[7],
+                    'today_ratings': row[8]
                 })
             return result
     except Exception as e:
         logging.error(f"Error in get_all_users_stats: {e}")
         return []
+    finally:
+        return_connection(conn)
+
+
+def get_global_users_stats():
+    """
+    Возвращает агрегированную статистику по всем пользователям.
+    {
+        'total_users': int,
+        'avg_anime': float,
+        'avg_real': float,
+        'avg_video': float,
+        'total_ratings': int,
+        'today_ratings': int
+    }
+    """
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT
+                    COUNT(*) as total_users,
+                    COALESCE(AVG(COALESCE(array_length(viewed_anime, 1), 0)), 0) as avg_anime,
+                    COALESCE(AVG(COALESCE(array_length(viewed_real, 1), 0)), 0) as avg_real,
+                    COALESCE(AVG(COALESCE(array_length(watched_videos, 1), 0)), 0) as avg_video,
+                    COALESCE(SUM(
+                        COALESCE(array_length(viewed_anime, 1), 0) +
+                        COALESCE(array_length(viewed_real, 1), 0) +
+                        COALESCE(array_length(watched_videos, 1), 0)
+                    ), 0) as total_ratings,
+                    COALESCE((
+                        SELECT COUNT(*)
+                        FROM user_ratings_log r
+                        WHERE r.created_at >= CURRENT_DATE
+                    ), 0) as today_ratings
+                FROM users
+            """)
+            row = cur.fetchone()
+            if row:
+                return {
+                    'total_users': row[0],
+                    'avg_anime': round(row[1], 1),
+                    'avg_real': round(row[2], 1),
+                    'avg_video': round(row[3], 1),
+                    'total_ratings': row[4],
+                    'today_ratings': row[5]
+                }
+            return None
+    except Exception as e:
+        logging.error(f"Error in get_global_users_stats: {e}")
+        return None
     finally:
         return_connection(conn)
 
@@ -611,10 +721,11 @@ def get_user(user_id, referrer_id=None):
 		return_connection(conn)
 
 
-def get_or_create_user(user_id, referrer_id=None, language='ru'):
+def get_or_create_user(user_id, referrer_id=None, language='ru', promo_code=None):
 	"""
 	Получает пользователя по id. Если не существует – создаёт.
 	Если передан referrer_id и реферер существует, начисляет ему 250 монет.
+	Если передан promo_code, сохраняет его в профиле пользователя.
 	Возвращает кортеж (user_dict, created), где created=True если пользователь только что создан.
 	При ошибке возвращает (None, False).
 	"""
@@ -649,8 +760,29 @@ def get_or_create_user(user_id, referrer_id=None, language='ru'):
 			""")
 			has_language_column = cur.fetchone() is not None
 
+			# Проверяем наличие колонки promo_code
+			cur.execute("""
+				SELECT column_name 
+				FROM information_schema.columns 
+				WHERE table_name = 'users' AND column_name = 'promo_code'
+			""")
+			has_promo_code_column = cur.fetchone() is not None
+
 			# Вставка нового пользователя
-			if has_language_column:
+			if has_language_column and has_promo_code_column:
+				if valid_referrer:
+					cur.execute("""
+						INSERT INTO users (id, referrer_id, coins, language, promo_code)
+						VALUES (%s, %s, 0, %s, %s)
+						RETURNING id
+					""", (user_id, referrer_id, language, promo_code))
+				else:
+					cur.execute("""
+						INSERT INTO users (id, coins, language, promo_code)
+						VALUES (%s, 0, %s, %s)
+						RETURNING id
+					""", (user_id, language, promo_code))
+			elif has_language_column:
 				if valid_referrer:
 					cur.execute("""
 						INSERT INTO users (id, referrer_id, coins, language)
@@ -1202,6 +1334,11 @@ def like(user_id):
 
 			cur.execute("UPDATE users SET coins = coins + 1 WHERE id = %s", (user_id,))
 			cur.execute("UPDATE users SET last_watched = NULL WHERE id = %s", (user_id,))
+			# Запись в лог оценок
+			cur.execute("""
+				INSERT INTO user_ratings_log (user_id, image_id, rating_type)
+				VALUES (%s, %s, 1)
+			""", (user_id, image_id))
 
 			conn.commit()
 		return True
@@ -1248,6 +1385,11 @@ def dislike(user_id):
 
 			cur.execute("UPDATE users SET coins = coins + 1 WHERE id = %s", (user_id,))
 			cur.execute("UPDATE users SET last_watched = NULL WHERE id = %s", (user_id,))
+			# Запись в лог оценок
+			cur.execute("""
+				INSERT INTO user_ratings_log (user_id, image_id, rating_type)
+				VALUES (%s, %s, -1)
+			""", (user_id, image_id))
 
 			conn.commit()
 		return True
@@ -1717,6 +1859,11 @@ def video_like(user_id, video_id):
             """, (video_id, user_id))
             # Начисляем 5 монет
             cur.execute("UPDATE users SET coins = coins + 5 WHERE id = %s", (user_id,))
+            # Запись в лог оценок
+            cur.execute("""
+                INSERT INTO user_ratings_log (user_id, video_id, rating_type)
+                VALUES (%s, %s, 1)
+            """, (user_id, video_id))
             conn.commit()
             return True
     except Exception as e:
@@ -1748,6 +1895,11 @@ def video_dislike(user_id, video_id):
                 conn.rollback()
                 return False
             cur.execute("UPDATE users SET coins = coins + 5 WHERE id = %s", (user_id,))
+            # Запись в лог оценок
+            cur.execute("""
+                INSERT INTO user_ratings_log (user_id, video_id, rating_type)
+                VALUES (%s, %s, -1)
+            """, (user_id, video_id))
             conn.commit()
             return True
     except Exception as e:
@@ -2060,13 +2212,14 @@ def create_promo_link(name: str, code: str = None) -> tuple:
 
 def get_all_promo_links() -> list:
     """
-    Возвращает список всех рекламных ссылок со статистикой.
+    Возвращает список всех рекламных ссылок со статистикой кликов и регистраций.
     Каждый элемент: {
         'id': int,
         'name': str,
         'code': str,
         'created_at': datetime,
-        'clicks_count': int
+        'clicks_count': int,
+        'registrations_count': int
     }
     """
     conn = get_connection()
@@ -2080,9 +2233,11 @@ def get_all_promo_links() -> list:
                     p.name,
                     p.code,
                     p.created_at,
-                    COUNT(s.user_id) as clicks_count
+                    COUNT(DISTINCT s.user_id) as clicks_count,
+                    COUNT(DISTINCT u.id) as registrations_count
                 FROM promo_links p
                 LEFT JOIN promo_link_stats s ON p.id = s.promo_link_id
+                LEFT JOIN users u ON u.promo_code = p.code
                 GROUP BY p.id, p.name, p.code, p.created_at
                 ORDER BY p.created_at DESC
             """)
@@ -2094,7 +2249,8 @@ def get_all_promo_links() -> list:
                     'name': row[1],
                     'code': row[2],
                     'created_at': row[3],
-                    'clicks_count': row[4]
+                    'clicks_count': row[4],
+                    'registrations_count': row[5]
                 })
             return result
     except Exception as e:
@@ -2273,6 +2429,116 @@ def set_user_language(user_id: int, language: str) -> bool:
         return_connection(conn)
 
 
+def set_user_promo_code(user_id: int, promo_code: str) -> bool:
+    """
+    Устанавливает рекламную ссылку (promo_code) пользователя.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("UPDATE users SET promo_code = %s WHERE id = %s", (promo_code, user_id))
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        logging.error(f"Error setting user promo code: {e}")
+        conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
+
+
+def get_promo_link_registration_stats(promo_code: str) -> dict:
+    """
+    Возвращает статистику по рекламной ссылке (сколько пользователей зарегистрировалось через неё).
+    Считает всех пользователей, у кого в профиле стоит этот promo_code.
+    """
+    conn = get_connection()
+    if not conn:
+        return {'total_users': 0, 'today_users': 0}
+    try:
+        with conn.cursor() as cur:
+            # Общее количество пользователей с этим promo_code
+            cur.execute("""
+                SELECT COUNT(*) FROM users WHERE promo_code = %s
+            """, (promo_code,))
+            total_users = cur.fetchone()[0]
+
+            # Количество пользователей, зарегистрированных сегодня
+            cur.execute("""
+                SELECT COUNT(*) FROM users 
+                WHERE promo_code = %s AND registered_at >= CURRENT_DATE
+            """, (promo_code,))
+            today_users = cur.fetchone()[0]
+
+            return {
+                'total_users': total_users,
+                'today_users': today_users
+            }
+    except Exception as e:
+        logging.error(f"Error getting promo link registration stats: {e}")
+        return {'total_users': 0, 'today_users': 0}
+    finally:
+        return_connection(conn)
+
+
+def get_all_promo_links_registration_stats() -> list:
+    """
+    Возвращает статистику по всем рекламным ссылкам (регистрации через promo_code).
+    """
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT 
+                    promo_code,
+                    COUNT(*) as total_users,
+                    COUNT(*) FILTER (WHERE registered_at >= CURRENT_DATE) as today_users,
+                    MIN(registered_at) as first_registration
+                FROM users
+                WHERE promo_code IS NOT NULL
+                GROUP BY promo_code
+                ORDER BY total_users DESC
+            """)
+            rows = cur.fetchall()
+            result = []
+            for row in rows:
+                result.append({
+                    'promo_code': row[0],
+                    'total_users': row[1],
+                    'today_users': row[2],
+                    'first_registration': row[3]
+                })
+            return result
+    except Exception as e:
+        logging.error(f"Error getting all promo links registration stats: {e}")
+        return []
+    finally:
+        return_connection(conn)
+
+
+def get_user_promo_code(user_id: int) -> str:
+    """
+    Возвращает promo_code пользователя.
+    """
+    conn = get_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT promo_code FROM users WHERE id = %s", (user_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        logging.error(f"Error getting user promo code: {e}")
+        return None
+    finally:
+        return_connection(conn)
+
+
 def get_user_transactions(user_id: int, limit: int = 10) -> list:
     """
     Возвращает последние транзакции пользователя.
@@ -2301,5 +2567,31 @@ def get_user_transactions(user_id: int, limit: int = 10) -> list:
     except Exception as e:
         logging.error(f"Error getting transactions for user {user_id}: {e}")
         return []
+    finally:
+        return_connection(conn)
+
+
+def add_feedback_message(user_id: int, message: str) -> bool:
+    """
+    Сохраняет сообщение обратной связи в базу данных.
+    Возвращает True при успехе, False при ошибке.
+    """
+    conn = get_connection()
+    if not conn:
+        logging.error(f"No connection available in add_feedback_message for user {user_id}")
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                INSERT INTO feedback_messages (user_id, message)
+                VALUES (%s, %s)
+            """, (user_id, message))
+            conn.commit()
+            logging.info(f"Feedback message saved from user {user_id}")
+            return True
+    except Exception as e:
+        logging.error(f"Error saving feedback message from user {user_id}: {e}")
+        conn.rollback()
+        return False
     finally:
         return_connection(conn)

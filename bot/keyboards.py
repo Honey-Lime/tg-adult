@@ -17,6 +17,7 @@ def get_main_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text(lang, 'btn_video'), callback_data="video")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_donate'), callback_data="donate")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_referral'), callback_data="referral")],
+        [InlineKeyboardButton(text=get_text(lang, 'btn_feedback'), callback_data="feedback")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_language'), callback_data="language")]
     ])
 
@@ -64,6 +65,7 @@ def get_admin_panel_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text(lang, 'admin_moderation'), callback_data="admin_moderation")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_notifications'), callback_data="admin_notifications")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_promo_links'), callback_data="admin_promo_links")],
+        [InlineKeyboardButton(text=get_text(lang, 'admin_referral_stats'), callback_data="admin_referral_stats")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_load_images'), callback_data="admin_load_images")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_clear_folder'), callback_data="admin_clear_import_folder")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_cleanup_json'), callback_data="admin_cleanup_json")],
@@ -202,6 +204,15 @@ def get_donate_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text(lang, 'btn_donate_1000'), callback_data="donate_1000")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_donate_5000'), callback_data="donate_5000")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_back'), callback_data="menu")]
+    ])
+
+
+def get_feedback_prompt_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """
+    Клавиатура для режима обратной связи (кнопка Отмена).
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text(lang, 'btn_feedback_cancel'), callback_data="feedback_cancel")]
     ])
 
 

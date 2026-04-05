@@ -97,9 +97,10 @@ async def _format_promo_stats(controller, promo_links: list) -> str:
     for link in promo_links:
         bot_info = await controller.bot.me()
         promo_url = f"https://t.me/{bot_info.username}?start={link['code']}"
+        registrations = link.get('registrations_count', 0)
         lines.append(
             f"📛 {link['name']}\n"
-            f"👥 Переходов: {link['clicks_count']}\n"
+            f"👥 Регистраций: {registrations} | 🔀 Переходов: {link['clicks_count']}\n"
             f"🔗 {promo_url}\n"
         )
     
@@ -137,7 +138,8 @@ async def handle_promo_delete(controller, chat_id: int, message_id: int, lang: s
         # Формируем пронумерованный список
         lines = ["🗑 Удаление ссылок. Отправьте номер ссылки для удаления:\n"]
         for i, link in enumerate(promo_links, 1):
-            lines.append(f"{i}. 📛 {link['name']} | 👥 {link['clicks_count']} переходов")
+            registrations = link.get('registrations_count', 0)
+            lines.append(f"{i}. 📛 {link['name']} | 👥 {registrations} рег. | 🔀 {link['clicks_count']} переходов")
         
         text = "\n".join(lines)
         controller.waiting_for_promo_delete[chat_id] = True
