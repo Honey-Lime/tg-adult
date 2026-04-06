@@ -386,8 +386,13 @@ def init_db():
 				ADD COLUMN IF NOT EXISTS saved_videos INTEGER[] DEFAULT ARRAY[]::INTEGER[],
 				ADD COLUMN IF NOT EXISTS last_video_time TIMESTAMP;
 			""")
+			# Добавление столбца is_read в feedback_messages, если его нет
+			cur.execute("""
+				ALTER TABLE feedback_messages
+				ADD COLUMN IF NOT EXISTS is_read BOOLEAN DEFAULT FALSE;
+			""")
 			conn.commit()
-			logging.info("Database initialization completed (message_history, users columns, have_video, videos, video stats)")
+			logging.info("Database initialization completed (message_history, users columns, have_video, videos, video stats, feedback is_read)")
 			
 			# Инициализация таблиц для рекламных ссылок
 			cur.execute("""
@@ -445,7 +450,8 @@ def init_db():
 					id SERIAL PRIMARY KEY,
 					user_id BIGINT NOT NULL,
 					message TEXT NOT NULL,
-					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+					created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+					is_read BOOLEAN DEFAULT FALSE
 				);
 				CREATE INDEX IF NOT EXISTS idx_feedback_messages_user_id ON feedback_messages(user_id);
 				CREATE INDEX IF NOT EXISTS idx_feedback_messages_created_at ON feedback_messages(created_at);
@@ -2765,6 +2771,63 @@ def add_feedback_message(user_id: int, message: str) -> bool:
             return True
     except Exception as e:
         logging.error(f"Error saving feedback message from user {user_id}: {e}")
+        conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
+
+
+def get_unread_feedback_messages() -> list:
+    """
+    Возвращает все непрочитанные сообщения обратной связи.
+    Каждый элемент: {'id': int, 'user_id': int, 'message': str, 'created_at': datetime}
+    """
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT id, user_id, message, created_at
+                FROM feedback_messages
+                WHERE is_read = FALSE
+                ORDER BY created_at ASC
+            """)
+            rows = cur.fetchall()
+            return [
+                {
+                    'id': row[0],
+                    'user_id': row[1],
+                    'message': row[2],
+                    'created_at': row[3]
+                }
+                for row in rows
+            ]
+    except Exception as e:
+        logging.error(f"Error fetching unread feedback messages: {e}")
+        return []
+    finally:
+        return_connection(conn)
+
+
+def mark_feedback_message_read(message_id: int) -> bool:
+    """
+    Помечает сообщение обратной связи как прочитанное.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE feedback_messages
+                SET is_read = TRUE
+                WHERE id = %s
+            """, (message_id,))
+            conn.commit()
+            return True
+    except Exception as e:
+        logging.error(f"Error marking feedback message {message_id} as read: {e}")
         conn.rollback()
         return False
     finally:

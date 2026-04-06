@@ -236,7 +236,17 @@ def get_admin_messages_menu_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text(lang, 'admin_write_user'), callback_data="admin_write_user")],
+        [InlineKeyboardButton(text=get_text(lang, 'admin_feedback_messages'), callback_data="admin_feedback_messages")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_back'), callback_data="admin_menu")]
+    ])
+
+
+def get_feedback_message_keyboard(message_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
+    """
+    Клавиатура с кнопкой "Прочитано" для сообщения обратной связи.
+    """
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text(lang, 'btn_mark_read'), callback_data=f"feedback_read_{message_id}")]
     ])
 
 

@@ -618,6 +618,7 @@ class BotController:
 				await message.delete()
 			except:
 				pass
+			return
 
 		# Обработка сообщения для отправки пользователю (админка)
 		if chat_id in self.admin_waiting_for_message and self.admin_waiting_for_message[chat_id]:
@@ -1003,6 +1004,10 @@ class BotController:
 				await self._handle_admin_write_user(chat_id, message_id, lang)
 			elif callback.data == "admin_cancel":
 				await self._handle_admin_cancel(chat_id, message_id, lang)
+			elif callback.data == "admin_feedback_messages":
+				await self._handle_admin_feedback_messages(chat_id, message_id, lang)
+			elif callback.data.startswith("feedback_read_"):
+				await self._handle_admin_feedback_mark_read(chat_id, callback.data, lang)
 			elif callback.data == "admin_promo_links":
 				await handle_admin_promo_links(self, chat_id, message_id, lang)
 			elif callback.data == "admin_referral_stats":
@@ -1336,6 +1341,74 @@ class BotController:
 		# Возвращаем в админ-меню
 		keyboard = keyboards.get_admin_panel_keyboard(lang)
 		await self.send_and_track(chat_id, text="Админ-панель. Выберите действие:", reply_markup=keyboard, track=False)
+
+	async def _handle_admin_feedback_messages(self, chat_id: int, message_id: int, lang: str) -> None:
+		"""Показать непрочитанные сообщения обратной связи."""
+		if chat_id not in self.admin_ids:
+			await self.send_and_track(chat_id, text="⛔ Доступ запрещён", track=False)
+			return
+		await self.delete_current(chat_id, message_id)
+		
+		messages = database.get_unread_feedback_messages()
+		
+		if not messages:
+			await self.send_and_track(
+				chat_id,
+				text=get_text(lang, 'admin_feedback_empty'),
+				track=False
+			)
+			# Возвращаем в меню сообщений
+			keyboard = keyboards.get_admin_messages_menu_keyboard(lang)
+			await self.send_and_track(
+				chat_id,
+				text=get_text(lang, 'admin_messages_menu'),
+				reply_markup=keyboard,
+				track=False
+			)
+			return
+		
+		# Отправляем каждое сообщение отдельно с кнопкой "Прочитано"
+		for msg in messages:
+			date_str = msg['created_at'].strftime('%d.%m.%Y %H:%M') if msg['created_at'] else 'Неизвестно'
+			text = get_text(lang, 'admin_feedback_item', user_id=msg['user_id'], date=date_str, message=msg['message'])
+			keyboard = keyboards.get_feedback_message_keyboard(msg['id'], lang)
+			await self.send_and_track(
+				chat_id,
+				text=text,
+				reply_markup=keyboard,
+				track=False
+			)
+		
+		# Возвращаем в меню сообщений
+		keyboard = keyboards.get_admin_messages_menu_keyboard(lang)
+		await self.send_and_track(
+			chat_id,
+			text=get_text(lang, 'admin_messages_menu'),
+			reply_markup=keyboard,
+			track=False
+		)
+
+	async def _handle_admin_feedback_mark_read(self, chat_id: int, callback_data: str, lang: str) -> None:
+		"""Отметить сообщение обратной связи как прочитанное."""
+		if chat_id not in self.admin_ids:
+			await self.send_and_track(chat_id, text="⛔ Доступ запрещён", track=False)
+			return
+		
+		message_id = int(callback_data.split("_")[2])
+		success = database.mark_feedback_message_read(message_id)
+		
+		if success:
+			await self.send_and_track(
+				chat_id,
+				text=get_text(lang, 'admin_feedback_marked_read'),
+				track=False
+			)
+		else:
+			await self.send_and_track(
+				chat_id,
+				text="❌ Ошибка при отметке сообщения.",
+				track=False
+			)
 
 	# ==================== МЕТОДЫ ОТПРАВКИ СООБЩЕНИЙ ====================
 

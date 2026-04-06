@@ -109,6 +109,12 @@ LOCALES = {
         'admin_message_send_error': "❌ Не удалось отправить сообщение пользователю {user_id}.",
         'admin_cancelled': "Отменено.",
         'btn_cancel': "❌ Отмена",
+        'admin_feedback_messages': "📬 Обратная связь",
+        'admin_feedback_menu': "📬 Обратная связь. Выберите действие:",
+        'admin_feedback_empty': "✅ Нет непрочитанных сообщений обратной связи.",
+        'admin_feedback_item': "💬 Сообщение от пользователя {user_id}\n📅 {date}\n\n📝 {message}",
+        'btn_mark_read': "✅ Прочитано",
+        'admin_feedback_marked_read': "✅ Сообщение отмечено как прочитанное.",
         
         # Пользователи
         'users_stats_text': "📊 Статистика пользователей (ID | имя | просмотры):",
@@ -301,6 +307,12 @@ LOCALES = {
         'admin_message_send_error': "❌ Failed to send message to user {user_id}.",
         'admin_cancelled': "Cancelled.",
         'btn_cancel': "❌ Cancel",
+        'admin_feedback_messages': "📬 Feedback",
+        'admin_feedback_menu': "📬 Feedback. Select action:",
+        'admin_feedback_empty': "✅ No unread feedback messages.",
+        'admin_feedback_item': "💬 Message from user {user_id}\n📅 {date}\n\n📝 {message}",
+        'btn_mark_read': "✅ Mark as read",
+        'admin_feedback_marked_read': "✅ Message marked as read.",
         
         # Пользователи
         'users_stats_text': "📊 User statistics (ID | name | views):",
