@@ -1294,6 +1294,14 @@ class BotController:
 				await self.send_and_track(chat_id, text=get_text(lang, 'video_file_missing'))
 				return
 
+			# Проверяем размер файла (лимит Telegram Bot API — 50 МБ)
+			file_size = os.path.getsize(video_path)
+			max_size = 50 * 1024 * 1024  # 50 MB
+			if file_size > max_size:
+				logging.warning(f"Видео {video['id']} слишком большое: {file_size / (1024*1024):.1f} МБ > 50 МБ")
+				await self.send_and_track(chat_id, text=get_text(lang, 'video_send_error'), track=False)
+				return
+
 			# Обновляем состояние пользователя (просмотр видео)
 			database.user_watched_video(chat_id, video['id'])
 
@@ -1307,14 +1315,24 @@ class BotController:
 			keyboard = keyboards.get_video_keyboard(lang)
 
 			video_file = FSInputFile(video_path)
-			sent = await self.send_and_track(
-				chat_id,
-				video=video_file,
-				text=caption_text,
-				reply_markup=keyboard,
-			)
-
-			self.last_video_message_id[chat_id] = sent.message_id
+			try:
+				sent = await self.send_and_track(
+					chat_id,
+					video=video_file,
+					text=caption_text,
+					reply_markup=keyboard,
+				)
+				self.last_video_message_id[chat_id] = sent.message_id
+			except Exception as e:
+				logging.error(f"Ошибка отправки видео {video['id']} ({video_path}): {e}")
+				# Если видео слишком большое или файл повреждён, пробуем следующее
+				if 'EntityTooLarge' in str(type(e).__name__) or 'Too Large' in str(e):
+					logging.warning(f"Видео {video['id']} превышает лимит Telegram, пропускаем")
+				await self.send_and_track(
+					chat_id,
+					text=get_text(lang, 'video_send_error'),
+					track=False,
+				)
 
 		finally:
 			self.sending_video[chat_id] = False
