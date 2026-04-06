@@ -68,6 +68,7 @@ from handlers.admin import (
     handle_promo_stats,
     handle_promo_delete,
     handle_admin_referral_stats,
+    handle_admin_daily_stats,
 )
 from handlers.admin.promo_handler import handle_promo_menu_back
 
@@ -912,6 +913,8 @@ class BotController:
 				await handle_admin_promo_links(self, chat_id, message_id, lang)
 			elif callback.data == "admin_referral_stats":
 				await handle_admin_referral_stats(self, chat_id, message_id, lang)
+			elif callback.data == "admin_daily_stats":
+				await handle_admin_daily_stats(self, chat_id, message_id, lang)
 			elif callback.data == "promo_create":
 				await handle_promo_create(self, chat_id, message_id, lang)
 			elif callback.data == "promo_stats":

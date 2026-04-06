@@ -336,6 +336,22 @@ def init_db():
 					ADD COLUMN promo_code TEXT
 				""")
 				logging.info("✓ Добавлен столбец promo_code в таблицу users")
+			# Проверка и добавление столбца registered_at
+			cur.execute("""
+				SELECT column_name 
+				FROM information_schema.columns 
+				WHERE table_name = 'users' AND column_name = 'registered_at'
+			""")
+			if not cur.fetchone():
+				cur.execute("""
+					ALTER TABLE users
+					ADD COLUMN registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+				""")
+				# Заполняем существующих пользователей текущим временем
+				cur.execute("""
+					UPDATE users SET registered_at = CURRENT_TIMESTAMP WHERE registered_at IS NULL
+				""")
+				logging.info("✓ Добавлен столбец registered_at в таблицу users")
 
 			# Добавление столбца have_video в таблицу posts, если его нет
 			cur.execute("""
@@ -1319,6 +1335,12 @@ def save(user_id, image_id):
 				WHERE id = %s
 			""", (image_id,))
 
+			# Запись в лог оценок (сохранение картинки)
+			cur.execute("""
+				INSERT INTO user_ratings_log (user_id, image_id, rating_type)
+				VALUES (%s, %s, 2)
+			""", (user_id, image_id))
+
 			conn.commit()
 			return True
 	except Exception as e:
@@ -2065,6 +2087,12 @@ def video_save(user_id, video_id):
                     WHERE id = %s
                 """, (video_id,))
             
+            # Запись в лог оценок (сохранение видео)
+            cur.execute("""
+                INSERT INTO user_ratings_log (user_id, video_id, rating_type)
+                VALUES (%s, %s, 2)
+            """, (user_id, video_id))
+            
             conn.commit()
             return True
     except Exception as e:
@@ -2716,5 +2744,239 @@ def add_feedback_message(user_id: int, message: str) -> bool:
         logging.error(f"Error saving feedback message from user {user_id}: {e}")
         conn.rollback()
         return False
+    finally:
+        return_connection(conn)
+
+
+def get_daily_stats(days: int = 7) -> list:
+    """
+    Возвращает статистику за последние N дней.
+    Каждый элемент: {
+        'date': str,
+        'new_users': int,
+        'image_likes': int,
+        'image_dislikes': int,
+        'video_likes': int,
+        'video_dislikes': int,
+        'active_users': int,
+        'image_saves': int,
+        'video_saves': int
+    }
+    """
+    conn = get_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                WITH date_series AS (
+                    SELECT generate_series(
+                        (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date,
+                        CURRENT_DATE,
+                        INTERVAL '1 day'
+                    )::date AS stat_date
+                ),
+                new_users AS (
+                    SELECT 
+                        registered_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM users
+                    WHERE registered_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                    GROUP BY registered_at::date
+                ),
+                image_likes AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND image_id IS NOT NULL
+                      AND rating_type = 1
+                    GROUP BY created_at::date
+                ),
+                image_dislikes AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND image_id IS NOT NULL
+                      AND rating_type = -1
+                    GROUP BY created_at::date
+                ),
+                video_likes AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND video_id IS NOT NULL
+                      AND rating_type = 1
+                    GROUP BY created_at::date
+                ),
+                video_dislikes AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND video_id IS NOT NULL
+                      AND rating_type = -1
+                    GROUP BY created_at::date
+                ),
+                active_users AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(DISTINCT user_id) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                    GROUP BY created_at::date
+                ),
+                image_saves AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND image_id IS NOT NULL
+                      AND rating_type = 2
+                    GROUP BY created_at::date
+                ),
+                video_saves AS (
+                    SELECT 
+                        created_at::date AS stat_date,
+                        COUNT(*) AS cnt
+                    FROM user_ratings_log
+                    WHERE created_at::date >= (CURRENT_DATE - (%s - 1) * INTERVAL '1 day')::date
+                      AND video_id IS NOT NULL
+                      AND rating_type = 2
+                    GROUP BY created_at::date
+                )
+                SELECT 
+                    ds.stat_date,
+                    COALESCE(nu.cnt, 0) AS new_users,
+                    COALESCE(il.cnt, 0) AS image_likes,
+                    COALESCE(idl.cnt, 0) AS image_dislikes,
+                    COALESCE(vl.cnt, 0) AS video_likes,
+                    COALESCE(vdl.cnt, 0) AS video_dislikes,
+                    COALESCE(au.cnt, 0) AS active_users,
+                    COALESCE(ims.cnt, 0) AS image_saves,
+                    COALESCE(vs.cnt, 0) AS video_saves
+                FROM date_series ds
+                LEFT JOIN new_users nu ON ds.stat_date = nu.stat_date
+                LEFT JOIN image_likes il ON ds.stat_date = il.stat_date
+                LEFT JOIN image_dislikes idl ON ds.stat_date = idl.stat_date
+                LEFT JOIN video_likes vl ON ds.stat_date = vl.stat_date
+                LEFT JOIN video_dislikes vdl ON ds.stat_date = vdl.stat_date
+                LEFT JOIN active_users au ON ds.stat_date = au.stat_date
+                LEFT JOIN image_saves ims ON ds.stat_date = ims.stat_date
+                LEFT JOIN video_saves vs ON ds.stat_date = vs.stat_date
+                ORDER BY ds.stat_date DESC
+            """, (days, days, days, days, days, days, days, days, days))
+            
+            rows = cur.fetchall()
+            result = []
+            for row in rows:
+                result.append({
+                    'date': row[0].strftime('%d.%m.%Y'),
+                    'new_users': row[1],
+                    'image_likes': row[2],
+                    'image_dislikes': row[3],
+                    'video_likes': row[4],
+                    'video_dislikes': row[5],
+                    'active_users': row[6],
+                    'image_saves': row[7],
+                    'video_saves': row[8]
+                })
+            return result
+    except Exception as e:
+        logging.error(f"Error in get_daily_stats: {e}")
+        return []
+    finally:
+        return_connection(conn)
+
+
+def get_all_daily_stats_csv() -> str:
+    """
+    Возвращает статистику по всем дням в формате CSV.
+    """
+    conn = get_connection()
+    if not conn:
+        return "Ошибка подключения к БД"
+    try:
+        with conn.cursor() as cur:
+            # Проверяем, есть ли пользователи
+            cur.execute("SELECT COALESCE(MIN(registered_at)::date, CURRENT_DATE) FROM users")
+            start_date = cur.fetchone()[0]
+            
+            cur.execute("""
+                SELECT 
+                    ds.stat_date,
+                    COALESCE(nu.cnt, 0) AS new_users,
+                    COALESCE(il.cnt, 0) AS image_likes,
+                    COALESCE(idl.cnt, 0) AS image_dislikes,
+                    COALESCE(vl.cnt, 0) AS video_likes,
+                    COALESCE(vdl.cnt, 0) AS video_dislikes,
+                    COALESCE(au.cnt, 0) AS active_users,
+                    COALESCE(ims.cnt, 0) AS image_saves,
+                    COALESCE(vs.cnt, 0) AS video_saves
+                FROM (
+                    SELECT generate_series(
+                        %s::date,
+                        CURRENT_DATE,
+                        INTERVAL '1 day'
+                    )::date AS stat_date
+                ) ds
+                LEFT JOIN (
+                    SELECT registered_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM users GROUP BY registered_at::date
+                ) nu ON ds.stat_date = nu.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE image_id IS NOT NULL AND rating_type = 1
+                    GROUP BY created_at::date
+                ) il ON ds.stat_date = il.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE image_id IS NOT NULL AND rating_type = -1
+                    GROUP BY created_at::date
+                ) idl ON ds.stat_date = idl.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE video_id IS NOT NULL AND rating_type = 1
+                    GROUP BY created_at::date
+                ) vl ON ds.stat_date = vl.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE video_id IS NOT NULL AND rating_type = -1
+                    GROUP BY created_at::date
+                ) vdl ON ds.stat_date = vdl.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(DISTINCT user_id) AS cnt
+                    FROM user_ratings_log
+                    GROUP BY created_at::date
+                ) au ON ds.stat_date = au.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE image_id IS NOT NULL AND rating_type = 2
+                    GROUP BY created_at::date
+                ) ims ON ds.stat_date = ims.stat_date
+                LEFT JOIN (
+                    SELECT created_at::date AS stat_date, COUNT(*) AS cnt
+                    FROM user_ratings_log WHERE video_id IS NOT NULL AND rating_type = 2
+                    GROUP BY created_at::date
+                ) vs ON ds.stat_date = vs.stat_date
+                ORDER BY ds.stat_date DESC
+            """, (start_date,))
+            
+            rows = cur.fetchall()
+            lines = ["Дата,Новые пользователи,Лайки фото,Дизлайки фото,Лайки видео,Дизлайки видео,Активные пользователи,Сохранения фото,Сохранения видео"]
+            for row in rows:
+                date_str = row[0].strftime('%d.%m.%Y') if row[0] else ''
+                lines.append(f"{date_str},{row[1]},{row[2]},{row[3]},{row[4]},{row[5]},{row[6]},{row[7]},{row[8]}")
+            return "\n".join(lines)
+    except Exception as e:
+        logging.error(f"Error in get_all_daily_stats_csv: {e}")
+        return f"Ошибка: {e}"
     finally:
         return_connection(conn)
