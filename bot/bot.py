@@ -107,6 +107,7 @@ class BotController:
 		self.last_video_data: Dict[int, dict] = {}			   # chat_id -> данные последнего видео (id, path, ...)
 		self.last_video_message_id: Dict[int, int] = {}		  # chat_id -> message_id последнего видео
 		self.sending_video: Dict[int, bool] = {}				# chat_id -> флаг, выполняется ли сейчас отправка видео
+		self.last_video_send_time: Dict[int, float] = {}		# chat_id -> время последней отправки видео (для антиспама)
 
 		# +++ Антиспам для оценок +++
 		self.last_image_rating_time: Dict[int, float] = {}		# chat_id -> время последней оценки картинки (лайк/дизлайк)
@@ -1271,6 +1272,14 @@ class BotController:
 		Если видео превышает 50 МБ, помечает его как need_moderate и пробует следующее.
 		video_type: 'top25', 'good', 'free'
 		"""
+		# +++ Антиспам: не чаще 1 раза в 10 секунд +++
+		now = asyncio.get_event_loop().time()
+		last_time = self.last_video_send_time.get(chat_id, 0)
+		if last_time > 0 and (now - last_time) < 10.0:
+			lang = self.get_user_lang(chat_id)
+			await self.send_and_track(chat_id, text=get_text(lang, 'too_often_video'), track=False)
+			return
+
 		# +++ Защита от одновременной отправки +++
 		if self.sending_video.get(chat_id, False):
 			logging.warning(f"Send video already in progress for {chat_id}")
@@ -1328,6 +1337,7 @@ class BotController:
 					reply_markup=keyboard,
 				)
 				self.last_video_message_id[chat_id] = sent.message_id
+				self.last_video_send_time[chat_id] = now
 				return
 
 			# Все попытки исчерпаны
