@@ -1111,7 +1111,7 @@ def get_good_images(type):
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute("SELECT * FROM pictures WHERE type = %s and need_moderate = false ORDER BY value DESC OFFSET 25", (type,))
+			cur.execute("SELECT * FROM pictures WHERE type = %s and need_moderate = false ORDER BY value DESC", (type,))
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
@@ -1659,7 +1659,6 @@ def get_image(user_id):
                       AND need_moderate = false
                       AND id != ALL(%s)
                     ORDER BY value DESC, random()
-                    OFFSET 25
                     LIMIT 50
                 """
             else:
