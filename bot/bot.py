@@ -1248,6 +1248,12 @@ class BotController:
 				pic_type = 'Аниме' if image_data['type'] == database.ImageType.ANIME.value else 'Фото'
 			
 			caption_text = get_text(lang, 'picture_caption', type=pic_type, coins=coins)
+			
+			# Для админов добавляем время с прошлой отправки
+			if chat_id in self.admin_ids:
+				elapsed = now - last_time if last_time > 0 else 0.0
+				caption_text += f"\n⏱ {elapsed:.2f}"
+			
 			keyboard = keyboards.get_picture_keyboard(lang)
 
 			image = FSInputFile(image_path)
@@ -1327,6 +1333,12 @@ class BotController:
 				coins = user.get('coins', 0) if user else 0
 
 				caption_text = f"Видео | {coins}🪙"
+				
+				# Для админов добавляем время с прошлой отправки
+				if chat_id in self.admin_ids:
+					elapsed = now - last_time if last_time > 0 else 0.0
+					caption_text += f"\n⏱ {elapsed:.2f}"
+				
 				keyboard = keyboards.get_video_keyboard(lang)
 
 				video_file = FSInputFile(video_path)
