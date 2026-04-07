@@ -48,38 +48,38 @@ async def handle_video_selection(controller, callback_data: str, chat_id: int, l
 
 
 async def _handle_video_top25(controller, chat_id: int, lang: str):
-    """Просмотр ТОП-25 видео (стоимость 500 монет)"""
+    """Просмотр ТОП-25 видео (стоимость 250 монет)"""
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     
-    if coins < 500:
+    if coins < 250:
         await controller.send_and_track(
             chat_id,
-            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 500🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
+            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 250🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
             track=False
         )
         return
     
-    if database.spend_coins(chat_id, 500):
+    if database.spend_coins(chat_id, 250):
         await controller.send_video(chat_id, 'top25')
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'spending_error'), track=False)
 
 
 async def _handle_video_good(controller, chat_id: int, lang: str):
-    """Просмотр 'хорошего' видео (стоимость 200 монет)"""
+    """Просмотр 'хорошего' видео (стоимость 100 монет)"""
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     
-    if coins < 200:
+    if coins < 100:
         await controller.send_and_track(
             chat_id,
-            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 200🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
+            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 100🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
             track=False
         )
         return
     
-    if database.spend_coins(chat_id, 200):
+    if database.spend_coins(chat_id, 100):
         await controller.send_video(chat_id, 'good')
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'spending_error'), track=False)

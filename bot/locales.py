@@ -27,8 +27,8 @@ LOCALES = {
         
         # Видео меню
         'video_menu_text': "Баланс: {coins}🪙\nВыберите видео:",
-        'btn_video_top25': "ТОП25 🪙500",
-        'btn_video_good': "Хорошее 🪙200",
+        'btn_video_top25': "ТОП25 🪙250",
+        'btn_video_good': "Хорошее 🪙100",
         'btn_video_free': "Без оценки",
         
         # Картинка
@@ -225,8 +225,8 @@ LOCALES = {
         
         # Видео меню
         'video_menu_text': "Balance: {coins}🪙\nSelect video:",
-        'btn_video_top25': "TOP25 🪙500",
-        'btn_video_good': "Good 🪙200",
+        'btn_video_top25': "TOP25 🪙250",
+        'btn_video_good': "Good 🪙100",
         'btn_video_free': "Unrated",
         
         # Картинка
