@@ -1139,7 +1139,7 @@ def get_good_images(type):
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute("SELECT * FROM pictures WHERE type = %s and need_moderate = false ORDER BY value DESC", (type,))
+			cur.execute("SELECT * FROM pictures WHERE type = %s AND need_moderate = false ORDER BY value DESC", (type,))
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
@@ -1157,7 +1157,7 @@ def get_noname_images(type):
 		return []
 	try:
 		with conn.cursor() as cur:
-			cur.execute("SELECT * FROM pictures WHERE value > -10 and type = %s and need_moderate = false ORDER BY total ASC", (type,))
+			cur.execute("SELECT * FROM pictures WHERE value > -10 AND type = %s AND need_moderate = false AND ( total < 10 OR (total > 0 AND likes::numeric / total > 0.2) ) ORDER BY total ASC", (type,))
 			columns = [desc[0] for desc in cur.description]
 			rows = cur.fetchall()
 			result = [dict(zip(columns, row)) for row in rows]
@@ -1702,7 +1702,7 @@ def get_image(user_id):
                     WHERE type = %s
                       AND need_moderate = false
                       AND id != ALL(%s)
-                      AND ( total <= 5 OR (total > 0 AND likes::numeric / total > 0.25) )
+                      AND ( total < 10 OR (total > 0 AND likes::numeric / total > 0.2) )
                     ORDER BY total ASC, random()
                     LIMIT 50
                 """
@@ -1853,6 +1853,7 @@ def get_video_free(user_id):
                 SELECT * FROM videos
                 WHERE id != ALL(%s)
                   AND (need_moderate IS NULL OR need_moderate = FALSE)
+                  AND ( total < 10 OR (total > 0 AND likes::numeric / total > 0.2) )
                 ORDER BY total ASC, random()
                 LIMIT 50
             """, (watched,))
