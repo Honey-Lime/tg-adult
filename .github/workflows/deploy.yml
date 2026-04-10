@@ -2,7 +2,7 @@ name: Deploy to Server
 
 on:
   push:
-    branches: [ main ]  # или ваша основная ветка
+    branches: [main] # или ваша основная ветка
 
 jobs:
   deploy:
@@ -15,7 +15,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            cd /root/adult-telegramm-bot
+            cd /root/tg-adult
             git pull origin main
             sudo systemctl restart telegram-bot.service
             sudo systemctl restart mini-app.service
