@@ -1693,6 +1693,7 @@ def get_image(user_id):
                       AND need_moderate = false
                       AND id != ALL(%s)
                     ORDER BY value DESC, random()
+                    OFFSET 25
                     LIMIT 50
                 """
             else:
