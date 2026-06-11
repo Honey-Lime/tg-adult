@@ -124,6 +124,25 @@ def update_picture_path(picture_id, new_filename):
 		return_connection(conn)
 
 
+def picture_exists_by_path(filename):
+	"""
+	Проверяет, существует ли уже картинка с таким именем файла в БД.
+	Возвращает True, если запись найдена.
+	"""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("SELECT 1 FROM pictures WHERE path = %s LIMIT 1", (filename,))
+			return cur.fetchone() is not None
+	except Exception as e:
+		logging.error(f"Error checking picture path existence: {e}")
+		return False
+	finally:
+		return_connection(conn)
+
+
 def add_video_record(post_id, path):
 	"""
 	Добавляет запись о видео в таблицу videos.
@@ -1285,8 +1304,8 @@ def add_saved_image(user_id, image_id):
 			cur.execute("""
 				UPDATE users
 				SET saved_images = array_append(coalesce(saved_images, ARRAY[]::integer[]), %s),
-					coins = coins - 25
-				WHERE id = %s AND coins >= 25
+					coins = coins - 20
+				WHERE id = %s AND coins >= 20
 				RETURNING coins
 			""", (image_id, user_id))
 			if cur.rowcount == 0:
@@ -1303,7 +1322,7 @@ def add_saved_image(user_id, image_id):
 
 def save(user_id, image_id):
 	"""
-	Сохраняет изображение: добавляет в saved_images, списывает 25 монет,
+	Сохраняет изображение: добавляет в saved_images, списывает 20 монет,
 	добавляет в просмотренные (viewed_*) и увеличивает value на 1.
 	Возвращает True при успехе, False при недостатке монет или ошибке.
 	"""
@@ -1322,13 +1341,13 @@ def save(user_id, image_id):
 			query = sql.SQL("""
 				UPDATE users
 				SET saved_images = array_append(coalesce(saved_images, ARRAY[]::integer[]), %s),
-					coins = coins - 25,
+					coins = coins - 20,
 					{viewed_column} = CASE
 						WHEN NOT (%s = ANY(coalesce({viewed_column}, ARRAY[]::integer[])))
 						THEN array_append(coalesce({viewed_column}, ARRAY[]::integer[]), %s)
 						ELSE {viewed_column}
 					END
-				WHERE id = %s AND coins >= 25
+				WHERE id = %s AND coins >= 20
 				RETURNING coins
 			""").format(viewed_column=sql.Identifier(viewed_field))
 			cur.execute(query, (image_id, image_id, image_id, user_id))
@@ -2011,7 +2030,7 @@ def video_dislike(user_id, video_id):
 
 def video_save(user_id, video_id):
     """
-    Сохранение видео: добавляет в saved_videos и liked_videos, списывает 50 монет.
+    Сохранение видео: добавляет в saved_videos и liked_videos, списывает 40 монет.
     Если видео ещё не в liked_videos - увеличивает likes, total, value на 2 (лайк + сохранение).
     Если видео уже в liked_videos - увеличивает value на 1 (только сохранение).
     Возвращает True при успехе, False при недостатке монет или ошибке.
@@ -2045,18 +2064,18 @@ def video_save(user_id, video_id):
             coins = row[0] if row else 0
             logging.info(f"video_save: user_id={user_id}, coins={coins}")
             
-            if coins < 50:
+            if coins < 40:
                 # Недостаточно монет
                 logging.warning(f"video_save: insufficient coins, user_id={user_id}, coins={coins}, video_id={video_id}")
                 return False
             
-            # Списываем 50 монет, добавляем в saved_videos и liked_videos
+            # Списываем 40 монет, добавляем в saved_videos и liked_videos
             if already_liked:
                 # Видео уже лайкнуто, добавляем только в saved_videos
                 cur.execute("""
                     UPDATE users
                     SET saved_videos = array_append(coalesce(saved_videos, ARRAY[]::INTEGER[]), %s),
-                        coins = coins - 50
+                        coins = coins - 40
                     WHERE id = %s
                     RETURNING coins
                 """, (video_id, user_id))
@@ -2066,7 +2085,7 @@ def video_save(user_id, video_id):
                     UPDATE users
                     SET saved_videos = array_append(coalesce(saved_videos, ARRAY[]::INTEGER[]), %s),
                         liked_videos = array_append(coalesce(liked_videos, ARRAY[]::INTEGER[]), %s),
-                        coins = coins - 50
+                        coins = coins - 40
                     WHERE id = %s
                     RETURNING coins
                 """, (video_id, video_id, user_id))
@@ -2179,6 +2198,25 @@ def update_video_path(video_id, new_path):
     except Exception as e:
         logging.error(f"Error updating video path: {e}")
         conn.rollback()
+        return False
+    finally:
+        return_connection(conn)
+
+
+def video_exists_by_path(filename):
+    """
+    Проверяет, существует ли уже видео с таким именем файла в БД.
+    Возвращает True, если запись найдена.
+    """
+    conn = get_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1 FROM videos WHERE path = %s LIMIT 1", (filename,))
+            return cur.fetchone() is not None
+    except Exception as e:
+        logging.error(f"Error checking video path existence: {e}")
         return False
     finally:
         return_connection(conn)

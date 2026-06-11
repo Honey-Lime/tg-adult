@@ -27,8 +27,8 @@ LOCALES = {
         
         # Видео меню
         'video_menu_text': "Баланс: {coins}🪙\nВыберите видео:",
-        'btn_video_top25': "ТОП25 🪙250",
-        'btn_video_good': "Хорошее 🪙100",
+        'btn_video_top25': "ТОП25 🪙150",
+        'btn_video_good': "Хорошее 🪙80",
         'btn_video_free': "Без оценки",
         
         # Картинка
@@ -36,11 +36,11 @@ LOCALES = {
         'btn_dislike': "😐",
         'btn_like': "❤️",
         'btn_report': "⚠️ Не тот тип\\Жалоба",
-        'btn_save': "Сохранить 25🪙",
+        'btn_save': "Сохранить 20🪙",
         
         # Видео
         'video_caption': "Видео | {coins}🪙",
-        'btn_video_save': "Сохранить 50🪙",
+        'btn_video_save': "Сохранить 40🪙",
         'btn_video_report': "⚠️ Жалоба",
         
         # Жалобы
@@ -54,7 +54,7 @@ LOCALES = {
         'btn_video_report_cancel': "Отмена",
         
         # Уведомления
-        'saved_message': "✅ Изображение сохранено! 🪙-25",
+        'saved_message': "✅ Изображение сохранено! 🪙-20",
         'insufficient_coins': "❌ Недостаточно монет",
         'save_error': "❌ Ошибка при сохранении",
         'too_often': "⏳ Слишком часто, подождите секунду",
@@ -70,10 +70,11 @@ LOCALES = {
         
         # Пополнение баланса
         'donate_menu_text': "💰 Ваш баланс: {coins}🪙\n\nВыберите тариф для пополнения баланса за Telegram Stars:",
-        'btn_donate_100': "100 🪙 - 10 ⭐",
-        'btn_donate_500': "500 🪙 - 45 ⭐",
-        'btn_donate_1000': "1000 🪙 - 80 ⭐",
-        'btn_donate_5000': "5000 🪙 - 350 ⭐",
+        'btn_donate_100': "100 🪙 - 5 ⭐",
+        'btn_donate_250': "250 🪙 - 10 ⭐",
+        'btn_donate_750': "750 🪙 - 25 ⭐",
+        'btn_donate_2000': "2000 🪙 - 50 ⭐",
+        'btn_donate_5000': "5000 🪙 - 100 ⭐",
         'payment_success': "✅ Оплата прошла успешно!\n\nВаш баланс пополнен на {amount}🪙\nСписано: {stars_paid} ⭐",
         'payment_error': "❌ Произошла ошибка при обработке платежа. Пожалуйста, обратитесь к администрации.",
         'insufficient_coins_video': "❌ Недостаточно средств. Для просмотра этого видео нужно {price}🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
@@ -226,8 +227,8 @@ LOCALES = {
         
         # Видео меню
         'video_menu_text': "Balance: {coins}🪙\nSelect video:",
-        'btn_video_top25': "TOP25 🪙250",
-        'btn_video_good': "Good 🪙100",
+        'btn_video_top25': "TOP25 🪙150",
+        'btn_video_good': "Good 🪙80",
         'btn_video_free': "Unrated",
         
         # Картинка
@@ -235,11 +236,11 @@ LOCALES = {
         'btn_dislike': "😐",
         'btn_like': "❤️",
         'btn_report': "⚠️ Wrong type\\Report",
-        'btn_save': "Save 25🪙",
+        'btn_save': "Save 20🪙",
         
         # Видео
         'video_caption': "Video | {coins}🪙",
-        'btn_video_save': "Save 50🪙",
+        'btn_video_save': "Save 40🪙",
         'btn_video_report': "⚠️ Report",
         
         # Жалобы
@@ -253,7 +254,7 @@ LOCALES = {
         'btn_video_report_cancel': "Cancel",
         
         # Уведомления
-        'saved_message': "✅ Image saved! 🪙-25",
+        'saved_message': "✅ Image saved! 🪙-20",
         'insufficient_coins': "❌ Insufficient coins",
         'save_error': "❌ Error saving",
         'too_often': "⏳ Too often, wait a second",
@@ -269,10 +270,11 @@ LOCALES = {
         
         # Пополнение баланса
         'donate_menu_text': "💰 Your balance: {coins}🪙\n\nSelect top-up plan for Telegram Stars:",
-        'btn_donate_100': "100 🪙 - 10 ⭐",
-        'btn_donate_500': "500 🪙 - 45 ⭐",
-        'btn_donate_1000': "1000 🪙 - 80 ⭐",
-        'btn_donate_5000': "5000 🪙 - 350 ⭐",
+        'btn_donate_100': "100 🪙 - 5 ⭐",
+        'btn_donate_250': "250 🪙 - 10 ⭐",
+        'btn_donate_750': "750 🪙 - 25 ⭐",
+        'btn_donate_2000': "2000 🪙 - 50 ⭐",
+        'btn_donate_5000': "5000 🪙 - 100 ⭐",
         'payment_success': "✅ Payment successful!\n\nYour balance topped up by {amount}🪙\nCharged: {stars_paid} ⭐",
         'payment_error': "❌ Payment processing error. Please contact administration.",
         'insufficient_coins_video': "❌ Insufficient funds. This video costs {price}🪙.\nYour balance: {coins}🪙\n\nTop up via /donut",

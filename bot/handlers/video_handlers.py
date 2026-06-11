@@ -48,38 +48,38 @@ async def handle_video_selection(controller, callback_data: str, chat_id: int, l
 
 
 async def _handle_video_top25(controller, chat_id: int, lang: str):
-    """Просмотр ТОП-25 видео (стоимость 250 монет)"""
+    """Просмотр ТОП-25 видео (стоимость 150 монет)"""
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     
-    if coins < 250:
+    if coins < 150:
         await controller.send_and_track(
             chat_id,
-            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 250🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
+            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 150🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
             track=False
         )
         return
     
-    if database.spend_coins(chat_id, 250):
+    if database.spend_coins(chat_id, 150):
         await controller.send_video(chat_id, 'top25')
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'spending_error'), track=False)
 
 
 async def _handle_video_good(controller, chat_id: int, lang: str):
-    """Просмотр 'хорошего' видео (стоимость 100 монет)"""
+    """Просмотр 'хорошего' видео (стоимость 80 монет)"""
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     
-    if coins < 100:
+    if coins < 80:
         await controller.send_and_track(
             chat_id,
-            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 100🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
+            text=f"❌ Недостаточно средств. Для просмотра этого видео нужно 80🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
             track=False
         )
         return
     
-    if database.spend_coins(chat_id, 100):
+    if database.spend_coins(chat_id, 80):
         await controller.send_video(chat_id, 'good')
     else:
         await controller.send_and_track(chat_id, text=get_text(lang, 'spending_error'), track=False)
@@ -110,7 +110,7 @@ async def handle_video_like(controller, chat_id: int, message_id: int, lang: str
     success = database.video_like(chat_id, video_id)
     
     if success:
-        # Оставляем кнопку "Сохранить 50" после оценки
+        # Оставляем кнопку "Сохранить 40" после оценки
         from keyboards import get_video_save_only_keyboard
         keyboard = get_video_save_only_keyboard(video_id, lang)
         await controller.bot.edit_message_reply_markup(
@@ -158,7 +158,7 @@ async def handle_video_dislike(controller, chat_id: int, message_id: int, lang: 
     success = database.video_dislike(chat_id, video_id)
     
     if success:
-        # Оставляем кнопку "Сохранить 50" после оценки
+        # Оставляем кнопку "Сохранить 40" после оценки
         from keyboards import get_video_save_only_keyboard
         keyboard = get_video_save_only_keyboard(video_id, lang)
         await controller.bot.edit_message_reply_markup(
@@ -195,7 +195,7 @@ async def handle_video_report_menu(controller, chat_id: int, message_id: int, la
 
 async def handle_video_save(controller, chat_id: int, message_id: int, lang: str, video_id: int = None, show_menu: bool = True):
     """
-    Сохранение видео (стоимость 50 монет).
+    Сохранение видео (стоимость 40 монет).
     
     Args:
         controller: Экземпляр BotController
@@ -216,10 +216,10 @@ async def handle_video_save(controller, chat_id: int, message_id: int, lang: str
     user = database.get_user(chat_id)
     coins = user.get('coins', 0) if user else 0
     
-    if coins < 50:
+    if coins < 40:
         await controller.send_and_track(
             chat_id,
-            text=f"❌ Недостаточно средств. Для сохранения видео нужно 50🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
+            text=f"❌ Недостаточно средств. Для сохранения видео нужно 40🪙.\nВаш баланс: {coins}🪙\n\nПополните баланс через /donut",
             track=False
         )
         return

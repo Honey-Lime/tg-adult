@@ -19,8 +19,8 @@ class TestDatabase:
     def mock_connection(self):
         """Фикстура для мока соединения с БД."""
         with patch('database.get_connection') as mock_get_conn:
-            mock_conn = Mock()
-            mock_cursor = Mock()
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
             mock_get_conn.return_value = mock_conn
             yield mock_conn, mock_cursor
@@ -123,8 +123,8 @@ class TestPromoLinks:
     def mock_connection(self):
         """Фикстура для мока соединения с БД."""
         with patch('database.get_connection') as mock_get_conn:
-            mock_conn = Mock()
-            mock_cursor = Mock()
+            mock_conn = MagicMock()
+            mock_cursor = MagicMock()
             mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
             mock_get_conn.return_value = mock_conn
             yield mock_conn, mock_cursor
@@ -132,12 +132,12 @@ class TestPromoLinks:
     def test_create_promo_link_success(self, mock_connection):
         """Тест успешного создания рекламной ссылки."""
         mock_conn, mock_cursor = mock_connection
-        mock_cursor.fetchone.return_value = ('abc12345',)
+        promo_code = 'abc12345'
         
-        success, result = database.create_promo_link("Test Link")
+        success, result = database.create_promo_link("Test Link", promo_code)
         
         assert success is True
-        assert result == 'abc12345'
+        assert result == promo_code
         mock_cursor.execute.assert_called()
 
     def test_create_promo_link_no_connection(self, mock_connection):
@@ -152,8 +152,8 @@ class TestPromoLinks:
         """Тест получения списка всех рекламных ссылок."""
         mock_conn, mock_cursor = mock_connection
         mock_cursor.fetchall.return_value = [
-            (1, "Test Link 1", "abc12345", None, 10),
-            (2, "Test Link 2", "xyz67890", None, 5)
+            (1, "Test Link 1", "abc12345", None, 10, 3),
+            (2, "Test Link 2", "xyz67890", None, 5, 1)
         ]
         
         links = database.get_all_promo_links()
@@ -161,8 +161,10 @@ class TestPromoLinks:
         assert len(links) == 2
         assert links[0]['name'] == "Test Link 1"
         assert links[0]['clicks_count'] == 10
+        assert links[0]['registrations_count'] == 3
         assert links[1]['name'] == "Test Link 2"
         assert links[1]['clicks_count'] == 5
+        assert links[1]['registrations_count'] == 1
 
     def test_get_all_promo_links_empty(self, mock_connection):
         """Тест получения пустого списка ссылок."""

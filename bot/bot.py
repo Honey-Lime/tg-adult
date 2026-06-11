@@ -721,7 +721,7 @@ class BotController:
 							# Но в GetStarTransactions нет payload, поэтому используем amount для определения
 							
 							# Маппинг stars к coins (обратный)
-							stars_map = {10: 100, 45: 500, 90: 1000, 400: 5000}
+							stars_map = {5: 100, 10: 250, 25: 750, 50: 2000, 100: 5000}
 							stars = transaction.amount
 							coins = stars_map.get(stars)
 							
@@ -918,7 +918,7 @@ class BotController:
 				elif callback.data == "video_save":
 					await handle_video_save(self, chat_id, message_id, lang)
 				elif callback.data.startswith("video_save_"):
-					# Обработка кнопки "Сохранить 50" после оценки видео
+					# Обработка кнопки "Сохранить 40" после оценки видео
 					video_id = int(callback.data.split("_")[2])
 					await handle_video_save(self, chat_id, message_id, lang, video_id, show_menu=False)
 				elif callback.data == "video_report":
@@ -1127,7 +1127,7 @@ class BotController:
 			await self.send_and_track(chat_id, text="Ошибка тарифа", track=False)
 			return
 
-		stars_map = {100: 10, 500: 45, 1000: 80, 5000: 350}
+		stars_map = {100: 5, 250: 10, 750: 25, 2000: 50, 5000: 100}
 		stars = stars_map.get(amount)
 		if not stars:
 			await self.send_and_track(chat_id, text="Неверный тариф", track=False)
@@ -1176,11 +1176,12 @@ class BotController:
 		try:
 			result = image_loader.load_from_import_json()
 			elapsed = time.time() - start_time
-			photos_added, videos_added, errors_count = result
+			photos_added, videos_added, skipped_duplicate_photos, skipped_duplicate_videos, errors_count = result
 			report_lines = [
 				f"✅ Загрузка завершена.",
 				f"Добавлено фото: {photos_added}",
 				f"Добавлено видео: {videos_added}",
+				f"Пропущено повторяющихся файлов: {skipped_duplicate_photos} / {skipped_duplicate_videos} (фото / видео)",
 				f"Ошибок: {errors_count}",
 				f"Время выполнения: {elapsed:.2f} сек."
 			]

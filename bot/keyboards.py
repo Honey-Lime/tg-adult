@@ -145,7 +145,7 @@ def get_video_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
 
 def get_video_save_only_keyboard(video_id: int, lang: str = 'ru') -> InlineKeyboardMarkup:
     """
-    Клавиатура с одной кнопкой "Сохранить 50" для видео после оценки.
+    Клавиатура с одной кнопкой "Сохранить 40" для видео после оценки.
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text(lang, 'btn_video_save'), callback_data=f"video_save_{video_id}")]
@@ -203,8 +203,9 @@ def get_donate_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
     """
     return InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text=get_text(lang, 'btn_donate_100'), callback_data="donate_100")],
-        [InlineKeyboardButton(text=get_text(lang, 'btn_donate_500'), callback_data="donate_500")],
-        [InlineKeyboardButton(text=get_text(lang, 'btn_donate_1000'), callback_data="donate_1000")],
+        [InlineKeyboardButton(text=get_text(lang, 'btn_donate_250'), callback_data="donate_250")],
+        [InlineKeyboardButton(text=get_text(lang, 'btn_donate_750'), callback_data="donate_750")],
+        [InlineKeyboardButton(text=get_text(lang, 'btn_donate_2000'), callback_data="donate_2000")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_donate_5000'), callback_data="donate_5000")],
         [InlineKeyboardButton(text=get_text(lang, 'btn_back'), callback_data="menu")]
     ])
