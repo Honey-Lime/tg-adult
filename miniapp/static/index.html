@@ -366,6 +366,12 @@
       let currentSubscription = { is_active: false, remaining_seconds: 0 };
       let subscriptionTimer = null;
 
+      function withUserId(endpoint) {
+        if (!userId) return endpoint;
+        const separator = endpoint.includes("?") ? "&" : "?";
+        return `${endpoint}${separator}user_id=${encodeURIComponent(userId)}`;
+      }
+
       // Инициализация текстов кнопок
       function initButtonTexts() {
         topAnimeBtn.textContent = t("topAnime");
@@ -397,6 +403,7 @@
         gallery.innerHTML = `<div class="loading">${t("loading")}</div>`;
         try {
           const response = await fetch(endpoint);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
           const data = await response.json();
           const images = Array.isArray(data) ? data : data.items;
           if (data.subscription) updateSubscription(data.subscription);
@@ -529,21 +536,21 @@
       topAnimeBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
         document.getElementById("filterButtons").style.display = "none";
-        currentTopEndpoint = `/api/top?type=0&user_id=${userId || ""}`;
+        currentTopEndpoint = withUserId("/api/top?type=0");
         loadImages(currentTopEndpoint, true);
       });
 
       topRealBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
         document.getElementById("filterButtons").style.display = "none";
-        currentTopEndpoint = `/api/top?type=1&user_id=${userId || ""}`;
+        currentTopEndpoint = withUserId("/api/top?type=1");
         loadImages(currentTopEndpoint, true);
       });
 
       topVideoBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
         document.getElementById("filterButtons").style.display = "none";
-        currentTopEndpoint = `/api/top_videos?user_id=${userId || ""}`;
+        currentTopEndpoint = withUserId("/api/top_videos");
         loadImages(currentTopEndpoint, true);
       });
 
