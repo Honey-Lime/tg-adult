@@ -3028,10 +3028,10 @@ def get_archive_stats() -> dict:
     """
     empty_stats = {
         'images': {
-            'anime': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
-            'real': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
+            'anime': {'total_eq_0': 0, 'total_eq_1': 0, 'total_gte_5': 0, 'low_rating': 0},
+            'real': {'total_eq_0': 0, 'total_eq_1': 0, 'total_gte_5': 0, 'low_rating': 0},
         },
-        'videos': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
+        'videos': {'total_eq_0': 0, 'total_eq_1': 0, 'total_gte_5': 0, 'low_rating': 0},
     }
 
     conn = get_connection()
@@ -3045,7 +3045,7 @@ def get_archive_stats() -> dict:
                     type,
                     COUNT(*) FILTER (WHERE total = 0) AS total_eq_0,
                     COUNT(*) FILTER (WHERE total = 1) AS total_eq_1,
-                    COUNT(*) FILTER (WHERE total = 5) AS total_eq_5,
+                    COUNT(*) FILTER (WHERE total >= 5) AS total_gte_5,
                     COUNT(*) FILTER (WHERE total >= 5 AND likes::numeric / total <= 0.2) AS low_rating
                 FROM pictures
                 WHERE type IN (%s, %s)
@@ -3059,12 +3059,12 @@ def get_archive_stats() -> dict:
             }
             stats['videos'] = empty_stats['videos'].copy()
 
-            for image_type, total_eq_0, total_eq_1, total_eq_5, low_rating in cur.fetchall():
+            for image_type, total_eq_0, total_eq_1, total_gte_5, low_rating in cur.fetchall():
                 image_key = 'anime' if image_type == ImageType.ANIME.value else 'real'
                 stats['images'][image_key] = {
                     'total_eq_0': total_eq_0,
                     'total_eq_1': total_eq_1,
-                    'total_eq_5': total_eq_5,
+                    'total_gte_5': total_gte_5,
                     'low_rating': low_rating,
                 }
 
@@ -3072,15 +3072,15 @@ def get_archive_stats() -> dict:
                 SELECT
                     COUNT(*) FILTER (WHERE total = 0) AS total_eq_0,
                     COUNT(*) FILTER (WHERE total = 1) AS total_eq_1,
-                    COUNT(*) FILTER (WHERE total = 5) AS total_eq_5,
+                    COUNT(*) FILTER (WHERE total >= 5) AS total_gte_5,
                     COUNT(*) FILTER (WHERE total >= 5 AND likes::numeric / total <= 0.2) AS low_rating
                 FROM videos
             """)
-            total_eq_0, total_eq_1, total_eq_5, low_rating = cur.fetchone()
+            total_eq_0, total_eq_1, total_gte_5, low_rating = cur.fetchone()
             stats['videos'] = {
                 'total_eq_0': total_eq_0,
                 'total_eq_1': total_eq_1,
-                'total_eq_5': total_eq_5,
+                'total_gte_5': total_gte_5,
                 'low_rating': low_rating,
             }
 
