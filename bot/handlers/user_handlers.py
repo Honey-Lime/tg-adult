@@ -179,3 +179,18 @@ async def handle_save_current(controller, chat_id: int, message_id: int, lang: s
             text=get_text(lang, 'save_error'),
             track=False,
         )
+
+
+async def handle_lootbox(controller, chat_id: int, lang: str):
+    """Лутбокс подписки: списывает 50 монет, кидает кость, при 6 выдаёт 30 минут."""
+    if not database.spend_coins(chat_id, 50):
+        return
+
+    dice_message = await controller.bot.send_dice(chat_id=chat_id, emoji="🎲")
+    if dice_message.dice and dice_message.dice.value == 6:
+        database.add_subscription_time(chat_id, 30 * 60)
+        await controller.send_and_track(
+            chat_id,
+            text=get_text(lang, 'lootbox_win'),
+            track=False,
+        )

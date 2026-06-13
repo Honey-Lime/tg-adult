@@ -48,6 +48,7 @@ from handlers.user_handlers import (
     handle_dislike,
     handle_save_from_history,
     handle_save_current,
+    handle_lootbox,
 )
 from handlers.report_handlers import (
     handle_report_menu,
@@ -943,6 +944,8 @@ class BotController:
 				await handle_save_from_history(self, callback.data, chat_id, message_id, lang)
 			elif callback.data == "save":
 				await handle_save_current(self, chat_id, message_id, lang)
+			elif callback.data == "lootbox":
+				await handle_lootbox(self, chat_id, lang)
 
 			# === ЖАЛОБЫ ===
 			elif callback.data == "report":

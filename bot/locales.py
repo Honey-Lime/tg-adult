@@ -37,6 +37,7 @@ LOCALES = {
         'btn_like': "❤️",
         'btn_report': "⚠️ Не тот тип\\Жалоба",
         'btn_save': "Сохранить 20🪙",
+        'btn_lootbox': "🎲 Лутбокс подписки 50🪙",
         
         # Видео
         'video_caption': "Видео | {coins}🪙",
@@ -67,6 +68,7 @@ LOCALES = {
         'coins_added': "✅ +5 монет",
         'error': "❌ Ошибка",
         'complaint_sent': "Жалоба отправлена. Спасибо! +1 монета",
+        'lootbox_win': "Поздравляю, фортуна на вашей стороне! +30 минут подписки(топ картинок и видео)",
         
         # Пополнение баланса
         'donate_menu_text': "💰 Ваш баланс: {coins}🪙\n\nВыберите тариф для пополнения баланса за Telegram Stars:",
@@ -238,6 +240,7 @@ LOCALES = {
         'btn_like': "❤️",
         'btn_report': "⚠️ Wrong type\\Report",
         'btn_save': "Save 20🪙",
+        'btn_lootbox': "🎲 Subscription lootbox 50🪙",
         
         # Видео
         'video_caption': "Video | {coins}🪙",
@@ -268,6 +271,7 @@ LOCALES = {
         'coins_added': "✅ +5 coins",
         'error': "❌ Error",
         'complaint_sent': "Report sent. Thank you! +1 coin",
+        'lootbox_win': "Congratulations, fortune is on your side! +30 minutes subscription (top pictures and videos)",
         
         # Пополнение баланса
         'donate_menu_text': "💰 Your balance: {coins}🪙\n\nSelect top-up plan for Telegram Stars:",
