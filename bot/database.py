@@ -3024,113 +3024,70 @@ def get_daily_stats(days: int = 7) -> list:
 
 def get_archive_stats() -> dict:
     """
-    Возвращает статистику архива контента:
-    - Общее количество картинок (по типам) и видео
-    - Сколько не проходят фильтр: total > 10 OR (total > 0 AND likes::numeric / total <= 0.2)
-    - Статистика по уровням total (<=1, <=2, <=4, <=10, <=20)
+    Возвращает статистику архива контента по изображениям и видео.
     """
+    empty_stats = {
+        'images': {
+            'anime': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
+            'real': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
+        },
+        'videos': {'total_eq_0': 0, 'total_eq_1': 0, 'total_eq_5': 0, 'low_rating': 0},
+    }
+
     conn = get_connection()
     if not conn:
-        return {
-            'images': {'total': 0, 'real': 0, 'anime': 0, 'need_more_ratings': 0,
-                       'total_lte_1': 0, 'total_lte_2': 0, 'total_lte_4': 0,
-                       'total_lte_10': 0, 'total_lte_20': 0},
-            'videos': {'total': 0, 'need_more_ratings': 0,
-                       'total_lte_1': 0, 'total_lte_2': 0, 'total_lte_4': 0,
-                       'total_lte_10': 0, 'total_lte_20': 0}
-        }
+        return empty_stats
+
     try:
         with conn.cursor() as cur:
-            # Статистика по картинкам
-            cur.execute("SELECT COUNT(*) FROM pictures")
-            images_total = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE type = %s", (ImageType.REAL.value,))
-            images_real = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE type = %s", (ImageType.ANIME.value,))
-            images_anime = cur.fetchone()[0]
-
             cur.execute("""
-                SELECT COUNT(*) FROM pictures
-                WHERE total > 10 OR (total > 0 AND likes::numeric / total <= 0.2)
-            """)
-            images_need_more = cur.fetchone()[0]
+                SELECT
+                    type,
+                    COUNT(*) FILTER (WHERE total = 0) AS total_eq_0,
+                    COUNT(*) FILTER (WHERE total = 1) AS total_eq_1,
+                    COUNT(*) FILTER (WHERE total = 5) AS total_eq_5,
+                    COUNT(*) FILTER (WHERE total >= 5 AND likes::numeric / total <= 0.2) AS low_rating
+                FROM pictures
+                WHERE type IN (%s, %s)
+                GROUP BY type
+            """, (ImageType.ANIME.value, ImageType.REAL.value))
 
-            # Уровни total для картинок
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE total <= 1")
-            images_lte_1 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE total <= 2")
-            images_lte_2 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE total <= 4")
-            images_lte_4 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE total <= 10")
-            images_lte_10 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM pictures WHERE total <= 20")
-            images_lte_20 = cur.fetchone()[0]
-
-            # Статистика по видео
-            cur.execute("SELECT COUNT(*) FROM videos")
-            videos_total = cur.fetchone()[0]
-
-            cur.execute("""
-                SELECT COUNT(*) FROM videos
-                WHERE total > 10 OR (total > 0 AND likes::numeric / total <= 0.2)
-            """)
-            videos_need_more = cur.fetchone()[0]
-
-            # Уровни total для видео
-            cur.execute("SELECT COUNT(*) FROM videos WHERE total <= 1")
-            videos_lte_1 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM videos WHERE total <= 2")
-            videos_lte_2 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM videos WHERE total <= 4")
-            videos_lte_4 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM videos WHERE total <= 10")
-            videos_lte_10 = cur.fetchone()[0]
-
-            cur.execute("SELECT COUNT(*) FROM videos WHERE total <= 20")
-            videos_lte_20 = cur.fetchone()[0]
-
-            return {
-                'images': {
-                    'total': images_total,
-                    'real': images_real,
-                    'anime': images_anime,
-                    'need_more_ratings': images_need_more,
-                    'total_lte_1': images_lte_1,
-                    'total_lte_2': images_lte_2,
-                    'total_lte_4': images_lte_4,
-                    'total_lte_10': images_lte_10,
-                    'total_lte_20': images_lte_20,
-                },
-                'videos': {
-                    'total': videos_total,
-                    'need_more_ratings': videos_need_more,
-                    'total_lte_1': videos_lte_1,
-                    'total_lte_2': videos_lte_2,
-                    'total_lte_4': videos_lte_4,
-                    'total_lte_10': videos_lte_10,
-                    'total_lte_20': videos_lte_20,
-                }
+            stats = empty_stats.copy()
+            stats['images'] = {
+                'anime': empty_stats['images']['anime'].copy(),
+                'real': empty_stats['images']['real'].copy(),
             }
+            stats['videos'] = empty_stats['videos'].copy()
+
+            for image_type, total_eq_0, total_eq_1, total_eq_5, low_rating in cur.fetchall():
+                image_key = 'anime' if image_type == ImageType.ANIME.value else 'real'
+                stats['images'][image_key] = {
+                    'total_eq_0': total_eq_0,
+                    'total_eq_1': total_eq_1,
+                    'total_eq_5': total_eq_5,
+                    'low_rating': low_rating,
+                }
+
+            cur.execute("""
+                SELECT
+                    COUNT(*) FILTER (WHERE total = 0) AS total_eq_0,
+                    COUNT(*) FILTER (WHERE total = 1) AS total_eq_1,
+                    COUNT(*) FILTER (WHERE total = 5) AS total_eq_5,
+                    COUNT(*) FILTER (WHERE total >= 5 AND likes::numeric / total <= 0.2) AS low_rating
+                FROM videos
+            """)
+            total_eq_0, total_eq_1, total_eq_5, low_rating = cur.fetchone()
+            stats['videos'] = {
+                'total_eq_0': total_eq_0,
+                'total_eq_1': total_eq_1,
+                'total_eq_5': total_eq_5,
+                'low_rating': low_rating,
+            }
+
+            return stats
     except Exception as e:
         logging.error(f"Error in get_archive_stats: {e}")
-        return {
-            'images': {'total': 0, 'real': 0, 'anime': 0, 'need_more_ratings': 0,
-                       'total_lte_1': 0, 'total_lte_2': 0, 'total_lte_4': 0,
-                       'total_lte_10': 0, 'total_lte_20': 0},
-            'videos': {'total': 0, 'need_more_ratings': 0,
-                       'total_lte_1': 0, 'total_lte_2': 0, 'total_lte_4': 0,
-                       'total_lte_10': 0, 'total_lte_20': 0}
-        }
+        return empty_stats
     finally:
         return_connection(conn)
 
