@@ -459,6 +459,33 @@
         }
       }
 
+      async function loadSubscriptionStatus() {
+        if (!userId) {
+          updateSubscription({ is_active: false, remaining_seconds: 0 });
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/subscription?user_id=${encodeURIComponent(userId)}`);
+          if (!response.ok) throw new Error(`HTTP ${response.status}: ${await response.text()}`);
+          updateSubscription(await response.json());
+        } catch (error) {
+          updateSubscription({ is_active: false, remaining_seconds: 0 });
+          console.error(error);
+          fetch("/api/client_log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: error.message,
+              endpoint: "/api/subscription",
+              userId,
+              userLang,
+              location: window.location.href,
+            }),
+          }).catch(() => {});
+        }
+      }
+
       function renderGallery(images, locked = false) {
         if (images.length === 0) {
           gallery.innerHTML = `<div class="loading">${t("noItems")}</div>`;
@@ -734,6 +761,7 @@
 
       // Загружаем сохраненные по умолчанию при первом входе
       if (userId) {
+        loadSubscriptionStatus();
         savedFilter = "photo";
         isFirstSavedLoad = false;
         document.getElementById("sortButtons").style.display = "flex";
