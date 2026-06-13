@@ -7,6 +7,13 @@ import database
 from locales import get_text
 
 
+def _low_rating_percent(stats: dict) -> float:
+    total = stats.get('total', 0) or 0
+    if total == 0:
+        return 0
+    return stats.get('low_rating', 0) / total * 100
+
+
 async def handle_admin_archive(controller, chat_id: int, message_id: int, lang: str):
     """
     Показывает статистику архива по total и доле лайков.
@@ -17,24 +24,33 @@ async def handle_admin_archive(controller, chat_id: int, message_id: int, lang: 
         return
 
     stats = database.get_archive_stats()
+    anime = stats['images']['anime']
+    real = stats['images']['real']
+    videos = stats['videos']
 
     text = (
         f"📦 Архив контента\n\n"
         f"🖼 Картинки аниме:\n"
-        f"  total = 0: {stats['images']['anime']['total_eq_0']}\n"
-        f"  total = 1: {stats['images']['anime']['total_eq_1']}\n"
-        f"  total >= 5: {stats['images']['anime']['total_gte_5']}\n"
-        f"  total >= 5 и likes / total <= 0.2: {stats['images']['anime']['low_rating']}\n\n"
+        f"  Всего: {anime['total']}\n"
+        f"  Низкооценённых: {_low_rating_percent(anime):.1f}%\n"
+        f"  total = 0: {anime['total_eq_0']}\n"
+        f"  total < 5: {anime['total_lt_5']}\n"
+        f"  total >= 5: {anime['total_gte_5']}\n"
+        f"  total >= 5 и likes / total <= 0.2: {anime['low_rating']}\n\n"
         f"📷 Картинки фото:\n"
-        f"  total = 0: {stats['images']['real']['total_eq_0']}\n"
-        f"  total = 1: {stats['images']['real']['total_eq_1']}\n"
-        f"  total >= 5: {stats['images']['real']['total_gte_5']}\n"
-        f"  total >= 5 и likes / total <= 0.2: {stats['images']['real']['low_rating']}\n\n"
+        f"  Всего: {real['total']}\n"
+        f"  Низкооценённых: {_low_rating_percent(real):.1f}%\n"
+        f"  total = 0: {real['total_eq_0']}\n"
+        f"  total < 5: {real['total_lt_5']}\n"
+        f"  total >= 5: {real['total_gte_5']}\n"
+        f"  total >= 5 и likes / total <= 0.2: {real['low_rating']}\n\n"
         f"🎞 Видео:\n"
-        f"  total = 0: {stats['videos']['total_eq_0']}\n"
-        f"  total = 1: {stats['videos']['total_eq_1']}\n"
-        f"  total >= 5: {stats['videos']['total_gte_5']}\n"
-        f"  total >= 5 и likes / total <= 0.2: {stats['videos']['low_rating']}"
+        f"  Всего: {videos['total']}\n"
+        f"  Низкооценённых: {_low_rating_percent(videos):.1f}%\n"
+        f"  total = 0: {videos['total_eq_0']}\n"
+        f"  total < 5: {videos['total_lt_5']}\n"
+        f"  total >= 5: {videos['total_gte_5']}\n"
+        f"  total >= 5 и likes / total <= 0.2: {videos['low_rating']}"
     )
 
     await controller.send_and_track(chat_id, text=text, track=False)
