@@ -360,8 +360,13 @@ class BotController:
 		await self._update_user_profile_from_message(message)
 		# Перечитываем пользователя, чтобы получить актуальный язык
 		user = database.get_user(chat_id)
+		lang = user.get('lang', user_lang) if user else user_lang
 
 		logging.debug(f"User object: {user}")  # для отладки
+
+		if promo_code == "donut":
+			await self.cmd_donut(message)
+			return
 
 		# Если пользователь только что создан – уведомляем админов
 		if created:
