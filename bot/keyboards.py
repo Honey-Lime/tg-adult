@@ -43,7 +43,7 @@ def get_picture_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=get_text(lang, 'btn_report'), callback_data="report"),
         InlineKeyboardButton(text=get_text(lang, 'btn_save'), callback_data="save")
     ]
-    keyboard_rows = [buttons[:2], buttons[2:]]
+    keyboard_rows = [buttons[:2], buttons[2:], [InlineKeyboardButton(text=get_text(lang, 'btn_lootbox'), callback_data="lootbox")]]
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
 
@@ -68,10 +68,21 @@ def get_admin_panel_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text=get_text(lang, 'admin_referral_stats'), callback_data="admin_referral_stats")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_messages'), callback_data="admin_messages")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_archive'), callback_data="admin_archive")],
+        [InlineKeyboardButton(text=get_text(lang, 'admin_test'), callback_data="admin_test")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_load_images'), callback_data="admin_load_images")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_clear_folder'), callback_data="admin_clear_import_folder")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_cleanup_json'), callback_data="admin_cleanup_json")],
         [InlineKeyboardButton(text=get_text(lang, 'admin_logs'), callback_data="admin_logs")]
+    ])
+
+
+def get_admin_test_subscription_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
+    """Клавиатура тестового добавления подписки админу."""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="1 минута", callback_data="admin_test_sub_minute")],
+        [InlineKeyboardButton(text="1 день", callback_data="admin_test_sub_day")],
+        [InlineKeyboardButton(text="1 месяц", callback_data="admin_test_sub_month")],
+        [InlineKeyboardButton(text=get_text(lang, 'btn_back'), callback_data="admin_menu")]
     ])
 
 
@@ -139,7 +150,7 @@ def get_video_keyboard(lang: str = 'ru') -> InlineKeyboardMarkup:
         InlineKeyboardButton(text=get_text(lang, 'btn_video_report'), callback_data="video_report"),
         InlineKeyboardButton(text=get_text(lang, 'btn_video_save'), callback_data="video_save")
     ]
-    keyboard_rows = [buttons[:2], buttons[2:]]
+    keyboard_rows = [buttons[:2], buttons[2:], [InlineKeyboardButton(text=get_text(lang, 'btn_lootbox'), callback_data="lootbox")]]
     return InlineKeyboardMarkup(inline_keyboard=keyboard_rows)
 
 

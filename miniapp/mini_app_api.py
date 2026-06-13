@@ -86,6 +86,35 @@ def get_db_connection():
 _cache = {}
 _CACHE_TTL = 30  # секунды
 
+SUBSCRIPTION_PLANS = {
+    "day": {"seconds": 24 * 60 * 60, "price": 1000},
+    "week": {"seconds": 7 * 24 * 60 * 60, "price": 2000},
+    "month": {"seconds": 30 * 24 * 60 * 60, "price": 5000},
+}
+
+
+def _subscription_payload(paid_ts):
+    now = int(time.time())
+    paid_until = int(paid_ts or 0)
+    remaining_seconds = max(0, paid_until - now)
+    return {
+        "is_active": remaining_seconds > 0,
+        "paid_until": paid_until,
+        "remaining_seconds": remaining_seconds,
+        "hide_after_seconds": remaining_seconds if 0 < remaining_seconds < 3600 else None,
+    }
+
+
+def _get_subscription_status(cur, user_id: int):
+    cur.execute("SELECT EXTRACT(EPOCH FROM paid) AS paid_ts, coins FROM users WHERE id = %s", (user_id,))
+    user = cur.fetchone()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    payload = _subscription_payload(user["paid_ts"])
+    payload["coins"] = user["coins"]
+    return payload
+
 def clear_saved_cache(user_id: int):
     """Очищает кэш для конкретного пользователя."""
     keys_to_delete = [
@@ -115,8 +144,7 @@ def cached_with_ttl(ttl):
     return decorator
 
 @app.get("/api/top")
-@cached_with_ttl(ttl=30)
-async def get_top(image_type: int = Query(..., alias="type")):
+async def get_top(image_type: int = Query(..., alias="type"), user_id: int | None = None):
     """
     Возвращает топ-25 изображений указанного типа (0 - аниме, 1 - реальные).
     """
@@ -124,6 +152,7 @@ async def get_top(image_type: int = Query(..., alias="type")):
     conn = get_db_connection()
     try:
         with conn.cursor() as cur:
+            subscription = _get_subscription_status(cur, user_id) if user_id else _subscription_payload(0)
             cur.execute("""
                 SELECT id, path, likes, dislikes, value, type
                 FROM pictures
@@ -133,9 +162,82 @@ async def get_top(image_type: int = Query(..., alias="type")):
             """, (image_type,))
             images = cur.fetchall()
             logger.info(f"Found {len(images)} images")
-            return images
+            return {"items": images, "subscription": subscription}
     except Exception as e:
         logger.error(f"Error in get_top: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/top_videos")
+async def get_top_videos(user_id: int | None = None):
+    """Возвращает топ-25 видео."""
+    logger.info(f"get_top_videos called with user_id={user_id}")
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            subscription = _get_subscription_status(cur, user_id) if user_id else _subscription_payload(0)
+            cur.execute("""
+                SELECT id, path, likes, dislikes, value, 'video' AS media_type
+                FROM videos
+                ORDER BY value DESC
+                LIMIT 25
+            """)
+            videos = cur.fetchall()
+            logger.info(f"Found {len(videos)} top videos")
+            return {"items": videos, "subscription": subscription}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_top_videos: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+
+
+@app.get("/api/subscription")
+async def get_subscription(user_id: int):
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            return _get_subscription_status(cur, user_id)
+    finally:
+        conn.close()
+
+
+@app.post("/api/subscription/buy")
+async def buy_subscription(user_id: int, plan: str):
+    if plan not in SUBSCRIPTION_PLANS:
+        raise HTTPException(status_code=400, detail="Unknown subscription plan")
+
+    plan_data = SUBSCRIPTION_PLANS[plan]
+    conn = get_db_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                UPDATE users
+                SET coins = coins - %(price)s,
+                    paid = to_timestamp(
+                        GREATEST(COALESCE(EXTRACT(EPOCH FROM paid), 0), EXTRACT(EPOCH FROM NOW())) + %(seconds)s
+                    )::timestamp
+                WHERE id = %(user_id)s AND coins >= %(price)s
+                RETURNING EXTRACT(EPOCH FROM paid) AS paid_ts, coins
+            """, {"price": plan_data["price"], "seconds": plan_data["seconds"], "user_id": user_id})
+            user = cur.fetchone()
+            if not user:
+                conn.rollback()
+                raise HTTPException(status_code=400, detail="Недостаточно монет")
+            conn.commit()
+
+            payload = _subscription_payload(user["paid_ts"])
+            payload["coins"] = user["coins"]
+            return payload
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logger.error(f"Error in buy_subscription: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
         conn.close()

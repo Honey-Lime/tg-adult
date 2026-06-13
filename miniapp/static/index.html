@@ -60,6 +60,69 @@
       .menu button:hover {
         opacity: 0.9;
       }
+      .subscription-panel {
+        position: fixed;
+        top: calc(env(safe-area-inset-top) + 8px);
+        left: calc(env(safe-area-inset-left) + 8px);
+        z-index: 900;
+        max-width: 280px;
+      }
+      .subscription-badge {
+        padding: 8px 12px;
+        border-radius: 14px;
+        border: 1px solid rgba(127, 127, 127, 0.2);
+        background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+        color: var(--tg-theme-text-color, #000);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .subscription-menu {
+        display: grid;
+        gap: 8px;
+        max-height: 0;
+        overflow: hidden;
+        opacity: 0;
+        transition: max-height 0.25s ease, opacity 0.25s ease, margin-top 0.25s ease;
+      }
+      .subscription-panel.open .subscription-menu {
+        max-height: 260px;
+        opacity: 1;
+        margin-top: 8px;
+      }
+      .subscription-menu button,
+      .pay-modal button {
+        padding: 10px;
+        border: none;
+        border-radius: 10px;
+        background: var(--tg-theme-button-color, #2481cc);
+        color: var(--tg-theme-button-text-color, #fff);
+        cursor: pointer;
+      }
+      .locked-top .card img,
+      .locked-top .card video {
+        filter: blur(14px);
+        pointer-events: none;
+      }
+      .pay-modal {
+        display: none;
+        position: fixed;
+        z-index: 950;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: min(90vw, 360px);
+        padding: 20px;
+        border-radius: 18px;
+        background: var(--tg-theme-bg-color, #fff);
+        color: var(--tg-theme-text-color, #000);
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35);
+        text-align: center;
+      }
+      .pay-modal.visible {
+        display: grid;
+        gap: 10px;
+      }
       .gallery {
         display: grid;
         grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -174,10 +237,28 @@
     </style>
   </head>
   <body>
+    <div class="subscription-panel" id="subscriptionPanel">
+      <div class="subscription-badge" id="subscriptionBadge"></div>
+      <div class="subscription-menu">
+        <button data-plan="day"></button>
+        <button data-plan="week"></button>
+        <button data-plan="month"></button>
+        <button id="topUpBtn"></button>
+      </div>
+    </div>
     <div class="menu">
       <button id="topAnimeBtn"></button>
       <button id="topRealBtn"></button>
+      <button id="topVideoBtn"></button>
       <button id="savedBtn"></button>
+    </div>
+    <div class="pay-modal" id="payModal">
+      <b id="payModalTitle"></b>
+      <div id="payModalText"></div>
+      <button data-plan="day"></button>
+      <button data-plan="week"></button>
+      <button data-plan="month"></button>
+      <button id="modalTopUpBtn"></button>
     </div>
     <div class="menu" id="sortButtons" style="display: none">
       <button id="sortByRatingBtn"></button>
@@ -206,6 +287,7 @@
         ru: {
           topAnime: "Топ аниме",
           topReal: "Топ фото",
+          topVideo: "Топ видео",
           saved: "Сохраненные",
           byRating: "⭐ По оценкам",
           byNewest: "🕐 По новизне",
@@ -223,10 +305,20 @@
             "Полноэкранный режим не поддерживается в вашей версии Telegram",
           fullscreenOn: "Приложение в полноэкранном режиме",
           fullscreenOff: "Приложение вышло из полноэкранного режима",
+          subscriptionLeft: "Осталось",
+          subscriptionExpired: "Подписка не активна",
+          payTitle: "Топ доступен по подписке",
+          payText: "Оплатите подписку коинами, чтобы открыть топ фото, аниме и видео.",
+          buyDay: "1 день — 1000🪙",
+          buyWeek: "1 неделя — 2000🪙",
+          buyMonth: "1 месяц — 5000🪙",
+          topUp: "Пополнить баланс",
+          buyError: "Не удалось оплатить подписку",
         },
         en: {
           topAnime: "Top anime",
           topReal: "Top photo",
+          topVideo: "Top video",
           saved: "Saved",
           byRating: "⭐ By rating",
           byNewest: "🕐 By newest",
@@ -244,6 +336,15 @@
             "Fullscreen mode is not supported in your Telegram version",
           fullscreenOn: "App is in fullscreen mode",
           fullscreenOff: "App exited fullscreen mode",
+          subscriptionLeft: "Left",
+          subscriptionExpired: "Subscription is inactive",
+          payTitle: "Top is available by subscription",
+          payText: "Pay with coins to unlock top photo, anime and video.",
+          buyDay: "1 day — 1000🪙",
+          buyWeek: "1 week — 2000🪙",
+          buyMonth: "1 month — 5000🪙",
+          topUp: "Top up balance",
+          buyError: "Failed to buy subscription",
         },
       };
 
@@ -254,17 +355,32 @@
       const gallery = document.getElementById("gallery");
       const topAnimeBtn = document.getElementById("topAnimeBtn");
       const topRealBtn = document.getElementById("topRealBtn");
+      const topVideoBtn = document.getElementById("topVideoBtn");
       const savedBtn = document.getElementById("savedBtn");
       const filterPhotoBtn = document.getElementById("filterPhotoBtn");
       const filterVideoBtn = document.getElementById("filterVideoBtn");
+      const subscriptionPanel = document.getElementById("subscriptionPanel");
+      const subscriptionBadge = document.getElementById("subscriptionBadge");
+      const payModal = document.getElementById("payModal");
+      let currentTopEndpoint = "/api/top?type=0";
+      let currentSubscription = { is_active: false, remaining_seconds: 0 };
+      let subscriptionTimer = null;
 
       // Инициализация текстов кнопок
       function initButtonTexts() {
         topAnimeBtn.textContent = t("topAnime");
         topRealBtn.textContent = t("topReal");
+        topVideoBtn.textContent = t("topVideo");
         savedBtn.textContent = t("saved");
         filterPhotoBtn.textContent = t("photo");
         filterVideoBtn.textContent = t("video");
+        document.getElementById("payModalTitle").textContent = t("payTitle");
+        document.getElementById("payModalText").textContent = t("payText");
+        document.querySelectorAll('[data-plan="day"]').forEach((btn) => btn.textContent = t("buyDay"));
+        document.querySelectorAll('[data-plan="week"]').forEach((btn) => btn.textContent = t("buyWeek"));
+        document.querySelectorAll('[data-plan="month"]').forEach((btn) => btn.textContent = t("buyMonth"));
+        document.getElementById("topUpBtn").textContent = t("topUp");
+        document.getElementById("modalTopUpBtn").textContent = t("topUp");
         document.getElementById("fullscreenBtn").textContent = t("fullscreen");
         // Обновляем текст загрузки
         const loadingEl = gallery.querySelector(".loading");
@@ -277,19 +393,43 @@
       let savedSortOrder = "desc"; // "asc" | "desc"
       let savedFilter = "photo"; // "all" | "photo" | "video"
 
-      async function loadImages(endpoint) {
+      async function loadImages(endpoint, isTop = false) {
         gallery.innerHTML = `<div class="loading">${t("loading")}</div>`;
         try {
           const response = await fetch(endpoint);
-          const images = await response.json();
-          renderGallery(images);
+          const data = await response.json();
+          const images = Array.isArray(data) ? data : data.items;
+          if (data.subscription) updateSubscription(data.subscription);
+          renderGallery(images, isTop && !currentSubscription.is_active);
         } catch (error) {
           gallery.innerHTML = `<div class="loading">${t("loadError")}</div>`;
           console.error(error);
         }
       }
 
-      function renderGallery(images) {
+      function formatDuration(seconds) {
+        seconds = Math.max(0, Math.floor(seconds || 0));
+        const months = Math.floor(seconds / (30 * 86400));
+        seconds %= 30 * 86400;
+        const days = Math.floor(seconds / 86400);
+        seconds %= 86400;
+        const hours = Math.floor(seconds / 3600);
+        const minutes = Math.floor((seconds % 3600) / 60);
+        return `${months}м ${days}д ${hours}ч ${minutes}м`;
+      }
+
+      function updateSubscription(subscription) {
+        currentSubscription = subscription || { is_active: false, remaining_seconds: 0 };
+        subscriptionBadge.textContent = currentSubscription.is_active
+          ? `${t("subscriptionLeft")}: ${formatDuration(currentSubscription.remaining_seconds)} ▼`
+          : `${t("subscriptionExpired")} ▼`;
+        if (subscriptionTimer) clearTimeout(subscriptionTimer);
+        if (currentSubscription.hide_after_seconds) {
+          subscriptionTimer = setTimeout(() => loadImages(currentTopEndpoint, true), currentSubscription.hide_after_seconds * 1000);
+        }
+      }
+
+      function renderGallery(images, locked = false) {
         if (images.length === 0) {
           gallery.innerHTML = `<div class="loading">${t("noItems")}</div>`;
           return;
@@ -327,6 +467,9 @@
           })
           .join("");
         gallery.innerHTML = html;
+        gallery.classList.toggle("locked-top", locked);
+        payModal.classList.toggle("visible", locked);
+        if (locked) return;
 
         // Добавляем обработчики кликов
         const cards = gallery.querySelectorAll(".card");
@@ -386,14 +529,55 @@
       topAnimeBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
         document.getElementById("filterButtons").style.display = "none";
-        loadImages("/api/top?type=0");
+        currentTopEndpoint = `/api/top?type=0&user_id=${userId || ""}`;
+        loadImages(currentTopEndpoint, true);
       });
 
       topRealBtn.addEventListener("click", () => {
         document.getElementById("sortButtons").style.display = "none";
         document.getElementById("filterButtons").style.display = "none";
-        loadImages("/api/top?type=1");
+        currentTopEndpoint = `/api/top?type=1&user_id=${userId || ""}`;
+        loadImages(currentTopEndpoint, true);
       });
+
+      topVideoBtn.addEventListener("click", () => {
+        document.getElementById("sortButtons").style.display = "none";
+        document.getElementById("filterButtons").style.display = "none";
+        currentTopEndpoint = `/api/top_videos?user_id=${userId || ""}`;
+        loadImages(currentTopEndpoint, true);
+      });
+
+      subscriptionBadge.addEventListener("click", () => {
+        subscriptionPanel.classList.toggle("open");
+      });
+
+      async function buySubscription(plan) {
+        if (!userId) {
+          tg.showAlert(t("userError"));
+          return;
+        }
+        try {
+          const response = await fetch(`/api/subscription/buy?user_id=${userId}&plan=${plan}`, { method: "POST" });
+          if (!response.ok) throw new Error(await response.text());
+          updateSubscription(await response.json());
+          payModal.classList.remove("visible");
+          loadImages(currentTopEndpoint, true);
+        } catch (error) {
+          tg.showAlert(t("buyError"));
+          console.error(error);
+        }
+      }
+
+      document.querySelectorAll("[data-plan]").forEach((btn) => {
+        btn.addEventListener("click", () => buySubscription(btn.dataset.plan));
+      });
+
+      function openTopUp() {
+        tg.openTelegramLink("https://t.me/hotpicturesbot?start=donate");
+      }
+
+      document.getElementById("topUpBtn").addEventListener("click", openTopUp);
+      document.getElementById("modalTopUpBtn").addEventListener("click", openTopUp);
 
       let isFirstSavedLoad = true;
 
@@ -528,7 +712,7 @@
         updateFilterButtons();
         loadSaved();
       } else {
-        loadImages("/api/top?type=0");
+        loadImages("/api/top?type=0", true);
       }
 
       // Модальное окно для изображений

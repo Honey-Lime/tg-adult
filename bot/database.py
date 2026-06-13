@@ -1544,6 +1544,33 @@ def spend_coins(user_id, amount):
 		return_connection(conn)
 
 
+def add_subscription_time(user_id, seconds):
+	"""Добавляет пользователю время подписки от текущего paid или от текущего момента."""
+	conn = get_connection()
+	if not conn:
+		return False
+	try:
+		with conn.cursor() as cur:
+			cur.execute("""
+				UPDATE users
+				SET paid = to_timestamp(
+					GREATEST(COALESCE(EXTRACT(EPOCH FROM paid), 0), EXTRACT(EPOCH FROM NOW())) + %s
+				)::timestamp
+				WHERE id = %s
+			""", (seconds, user_id))
+			if cur.rowcount == 0:
+				conn.rollback()
+				return False
+			conn.commit()
+			return True
+	except Exception as e:
+		logging.error(f"Error adding subscription time for user {user_id}: {e}")
+		conn.rollback()
+		return False
+	finally:
+		return_connection(conn)
+
+
 def cleanup_by_json(json_path):
     """
     Читает JSON-файл со списком имён файлов, находит соответствующие записи в таблице pictures,
