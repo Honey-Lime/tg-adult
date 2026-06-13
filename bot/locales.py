@@ -70,6 +70,9 @@ LOCALES = {
         'complaint_sent': "Жалоба отправлена. Спасибо! +1 монета",
         'lootbox_win': "Поздравляю, фортуна на вашей стороне! +30 минут подписки(топ картинок и видео)",
         'lootbox_lose': "Эх, не свезло...",
+        'lootbox_insufficient_coins': "У вас недостаточно средств",
+        'btn_lootbox_again': "Давай еще!",
+        'btn_top_up_balance': "Пополнить баланс",
         
         # Пополнение баланса
         'donate_menu_text': "💰 Ваш баланс: {coins}🪙\n\nВыберите тариф для пополнения баланса за Telegram Stars:",
@@ -274,6 +277,9 @@ LOCALES = {
         'complaint_sent': "Report sent. Thank you! +1 coin",
         'lootbox_win': "Congratulations, fortune is on your side! +30 minutes subscription (top pictures and videos)",
         'lootbox_lose': "Eh, no luck...",
+        'lootbox_insufficient_coins': "You have insufficient funds",
+        'btn_lootbox_again': "Let's try again!",
+        'btn_top_up_balance': "Top up balance",
         
         # Пополнение баланса
         'donate_menu_text': "💰 Your balance: {coins}🪙\n\nSelect top-up plan for Telegram Stars:",

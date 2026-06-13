@@ -4,12 +4,25 @@
 
 import asyncio
 import aiohttp
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 import database
 from keyboards import get_save_button_keyboard
 from locales import get_text
 
 # URL miniapp API для очистки кэша
 MINIAPP_API_URL = "http://localhost:8000"
+
+
+def get_lootbox_again_keyboard(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text(lang, 'btn_lootbox_again'), callback_data="lootbox")]
+    ])
+
+
+def get_lootbox_top_up_keyboard(lang: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=get_text(lang, 'btn_top_up_balance'), callback_data="donate")]
+    ])
 
 async def clear_miniapp_cache(user_id: int):
     """Очищает кэш miniapp для пользователя после сохранения изображения."""
@@ -185,6 +198,12 @@ async def handle_save_current(controller, chat_id: int, message_id: int, lang: s
 async def handle_lootbox(controller, chat_id: int, lang: str):
     """Лутбокс подписки: списывает 50 монет, кидает кость, при 6 выдаёт 30 минут."""
     if not database.spend_coins(chat_id, 50):
+        await controller.send_and_track(
+            chat_id,
+            text=get_text(lang, 'lootbox_insufficient_coins'),
+            reply_markup=get_lootbox_top_up_keyboard(lang),
+            track=False,
+        )
         return
 
     dice_message = await controller.bot.send_dice(chat_id=chat_id, emoji="🎲")
@@ -194,11 +213,13 @@ async def handle_lootbox(controller, chat_id: int, lang: str):
         await controller.send_and_track(
             chat_id,
             text=get_text(lang, 'lootbox_win'),
+            reply_markup=get_lootbox_again_keyboard(lang),
             track=False,
         )
     else:
         await controller.send_and_track(
             chat_id,
             text=get_text(lang, 'lootbox_lose'),
+            reply_markup=get_lootbox_again_keyboard(lang),
             track=False,
         )
