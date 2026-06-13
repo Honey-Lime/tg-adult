@@ -23,7 +23,18 @@ load_dotenv()
 app = FastAPI()
 
 # Настройка логирования
-logging.basicConfig(level=logging.INFO)
+LOG_DIR = Path(__file__).parent / "app" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "miniapp.log"
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler(LOG_FILE, encoding="utf-8"),
+    ],
+)
 logger = logging.getLogger(__name__)
 
 # Проверка наличия ffmpeg при старте
@@ -58,6 +69,36 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
         status_code=422,
         content={"detail": exc.errors(), "body": exc.body},
     )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    logger.exception(f"Unhandled error for request {request.url}: {exc}")
+    return JSONResponse(status_code=500, content={"detail": str(exc)})
+
+
+@app.post("/api/client_log")
+async def client_log(request: Request):
+    """Пишет ошибки фронтенда miniapp в общий лог miniapp."""
+    try:
+        payload = await request.json()
+    except Exception:
+        payload = {"raw": await request.body()}
+    logger.error(f"Miniapp client log: {payload}")
+    return {"status": "ok"}
+
+
+@app.get("/app/logs")
+async def app_logs(lines: int = 200):
+    """Показывает последние строки лога miniapp."""
+    lines = max(1, min(lines, 1000))
+    if not LOG_FILE.exists():
+        return JSONResponse({"logs": []})
+
+    with LOG_FILE.open("r", encoding="utf-8", errors="replace") as log_file:
+        log_lines = log_file.readlines()[-lines:]
+
+    return JSONResponse({"logs": log_lines})
 
 # Раздача статических файлов (фронтенд)
 app.mount("/static", StaticFiles(directory="static"), name="static")

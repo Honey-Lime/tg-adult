@@ -403,14 +403,29 @@
         gallery.innerHTML = `<div class="loading">${t("loading")}</div>`;
         try {
           const response = await fetch(endpoint);
-          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(`HTTP ${response.status}: ${errorText}`);
+          }
           const data = await response.json();
           const images = Array.isArray(data) ? data : data.items;
+          if (!Array.isArray(images)) throw new Error(`Invalid API response: ${JSON.stringify(data)}`);
           if (data.subscription) updateSubscription(data.subscription);
           renderGallery(images, isTop && !currentSubscription.is_active);
         } catch (error) {
           gallery.innerHTML = `<div class="loading">${t("loadError")}</div>`;
           console.error(error);
+          fetch("/api/client_log", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              message: error.message,
+              endpoint,
+              userId,
+              userLang,
+              location: window.location.href,
+            }),
+          }).catch(() => {});
         }
       }
 
