@@ -2,6 +2,7 @@
 Обработчики действий пользователя: лайки, дизлайки, сохранения изображений.
 """
 
+import asyncio
 import aiohttp
 import database
 from keyboards import get_save_button_keyboard
@@ -187,10 +188,17 @@ async def handle_lootbox(controller, chat_id: int, lang: str):
         return
 
     dice_message = await controller.bot.send_dice(chat_id=chat_id, emoji="🎲")
+    await asyncio.sleep(4)
     if dice_message.dice and dice_message.dice.value == 6:
         database.add_subscription_time(chat_id, 30 * 60)
         await controller.send_and_track(
             chat_id,
             text=get_text(lang, 'lootbox_win'),
+            track=False,
+        )
+    else:
+        await controller.send_and_track(
+            chat_id,
+            text=get_text(lang, 'lootbox_lose'),
             track=False,
         )
