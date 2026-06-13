@@ -14,6 +14,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import hashlib
+from datetime import datetime, timezone
 
 # Добавляем корень проекта в путь для импорта
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -21,6 +22,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 load_dotenv()
 
 app = FastAPI()
+
+MINIAPP_VERSION = str(int(time.time()))
 
 # Настройка логирования
 LOG_DIR = Path(__file__).parent / "app" / "logs"
@@ -453,7 +456,13 @@ async def clear_cache(user_id: int):
 
 @app.get("/app")
 async def serve_app():
-	return FileResponse("static/index.html")
+	response = FileResponse("static/index.html")
+	response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+	response.headers["Pragma"] = "no-cache"
+	response.headers["Expires"] = "0"
+	response.headers["ETag"] = MINIAPP_VERSION
+	response.headers["Last-Modified"] = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S GMT")
+	return response
 
 @app.get("/api/video_thumbnail")
 async def get_video_thumbnail(video_path: str = Query(...)):
